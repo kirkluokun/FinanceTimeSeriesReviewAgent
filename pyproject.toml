@@ -1,0 +1,40 @@
+[project]
+name = "financial-aiagent"
+version = "0.1.0"
+description = "infoAI using crewAI"
+authors = [{ name = "Kirk", email = "luokunkirk@outlook.com" }]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "crewai[tools]>=0.16.3",
+    "langchain>=0.1.8",
+    "langchain-openai>=0.0.6",
+    "langchain-anthropic>=0.1.1",
+    "langchain-google-genai>=0.0.9",
+    "langchain-community>=0.0.21",
+    "pydantic>=2.6.1",
+    "python-dotenv>=1.0.1",
+    "litellm>=1.21.1",
+    "openai>=1.12.0",
+    "anthropic>=0.18.1",
+    "google-generativeai>=0.3.2",
+    "beautifulsoup4>=4.12.3",
+    "requests>=2.31.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.3",
+    "PyYAML>=6.0.1",
+    "docling>=2.18.0",
+]
+
+[project.scripts]
+infoai = "infoai.main:run"
+run_crew = "infoai.main:run"
+train = "infoai.main:train"
+replay = "infoai.main:replay"
+test = "infoai.main:test"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"

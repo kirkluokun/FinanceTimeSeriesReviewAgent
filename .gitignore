@@ -1,0 +1,102 @@
+# 环境变量和密钥
+.env
+*.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Python相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 输入输出目录
+input/
+output/
+crewtest_report/
+output/crewtest_report/
+outputs/
+data/
+results/
+exports/
+imports/
+datasets/
+reports/
+report/
+testlog/
+tests/
+test/
+test_output/
+backup/
+
+
+# 日志和缓存
+log/
+logs/
+*.log
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 内存和临时文件
+memory/
+.tmp/
+temp/
+tmp/
+.temp/
+
+# CrewAI 特定文件
+.crewai/
+.databricks/
+crewai_runs/
+agent_memory/
+conversation_history/
+
+# IDE和编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 虚拟环境
+venv/
+.venv/
+virtualenv/
+ENV/
+.crewai/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# 本地配置
+config.local.yaml
+*.local.yaml
+*.local.json
+
+# 密钥文件
+*.pem
+*.key 
+.env

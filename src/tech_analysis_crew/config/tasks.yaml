@@ -1,0 +1,50 @@
+# 任务配置文件
+# 定义工作流中的各个任务
+
+# optimize_query_task:
+#   description: "根据用户输入和时间序列数据生成精确的搜索查询或提取关键指标。若请求类型为extract_indicator，则从用户查询中提取关键金融指标（如证券名称、商品等）并以格式indicator:{extracted_indicator}返回；若请求类型为optimize_query，则生成优化的搜索查询，必须保持after:DATE before:DATE的时间限制格式，如'why VLCC price decrease after:2024-02-16 before:2025-01-03'。"
+#   expected_output: "若提取指标，则返回格式为indicator:{extracted_indicator}；若优化查询，则返回优化后的搜索查询字符串，保持'after:DATE before:DATE'的时间限制格式。所有输出均为英文。"
+#   agent: "query_agent"
+#   async_execution: false
+#   output_file: "{job_id}/queries/{time_period_id}_optimized_query.txt"
+
+search_news_task:
+  description: "使用搜索引擎查找与时间段价格变化相关的新闻和信息"
+  expected_output: "搜索结果JSON"
+  agent: "search_agent"
+  async_execution: false
+  output_file: "{job_id}/serper/{time_period_id}_search_results.json"
+
+crawl_websites_task:
+  description: "爬取搜索结果中的网页内容"
+  expected_output: "爬取的网页内容"
+  agent: "crawler_agent"
+  async_execution: true
+  output_file: "{job_id}/crawled/{time_period_id}_{url_id}.txt"
+
+analyze_content_task:
+  description: "分析爬取的内容，提取与价格变化相关的关键信息"
+  expected_output: "内容分析结果"
+  agent: "content_analyzer_agent"
+  async_execution: true
+  output_file: "{job_id}/analysis/{time_period_id}_{url_id}_analysis.json"
+
+analyze_time_period_task:
+  description: "分析特定时间段的价格变化原因"
+  expected_output: "时间段分析结果"
+  agent: "lead_analyst_agent"
+  async_execution: false
+  output_file: "{job_id}/analysis/{time_period_id}_summary.json"
+
+generate_report_task:
+  description: "生成完整的分析报告"
+  expected_output: "完整的分析报告"
+  agent: "report_agent"
+  async_execution: false
+  output_file: "{job_id}/reports/final_report.md"
+
+extract_indicator_task:
+  description: "从用户查询中提取需要被搜索的主体指标，如果是中文则翻译成英文，返回格式为‘提取的英文指标名’。"
+  expected_output: "返回格式为‘提取的英文指标名’，例如’gold price’"
+  agent: "query_agent"
+  async_execution: false

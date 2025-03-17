@@ -1,0 +1,24 @@
+
+framework_task:
+  description: >
+    对{topic}进行全面的研究，梳理出研究这个问题的框架，然后根据框架进行信息检索。并且考虑到当前日期是{current_date}。
+  expected_output: >
+    一个包含关于{topic}的研究问题的若干个子问题的列表。
+  agent: researcher
+
+research_task:
+  description: >
+    根据{topic}进行深度研究。确保找到的信息是和{topic}相关的深度信息，并且考虑到当前日期是{current_date}。
+  expected_output: >
+    针对{topic}，给出观点的内容和论据的支撑，在论据后面记录信息来源的url地址。
+  agent: researcher
+
+reporting_task:
+  description: >
+    回顾你得到的上下文，并借用检索工具，对每个主题进行检索，根据检索内容将每个主题扩展为报告的一个完整部分。
+    确保报告详细，每个观点的来源都包含信息来源的url地址。
+  expected_output: >
+    一个完整的报告，每个要点都有明确的观点和论据的支撑。
+    每个论据都必须记录有信息来源的url地址。
+    格式为markdown，不包含'```'
+  agent: reporting_analyst
