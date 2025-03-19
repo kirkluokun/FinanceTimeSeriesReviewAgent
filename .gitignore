@@ -47,6 +47,14 @@ tests/
 test/
 test_output/
 backup/
+testlog/
+results/
+data/
+db/
+research_crew/
+UI/
+tool/
+
 
 
 # 日志和缓存

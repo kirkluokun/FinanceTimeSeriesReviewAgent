@@ -71,7 +71,7 @@ def run_analysis(input_path, output_dir='results'):
     input_filename = pathlib.Path(input_path).stem
     
     # 使用与analyze相同的价格列
-    price_col = 'close'
+    price_col = 'value'
     if price_col not in df.columns and len(df.columns) > 0:
         price_col = df.columns[0]
     

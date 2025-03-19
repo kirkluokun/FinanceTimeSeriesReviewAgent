@@ -62,7 +62,7 @@ class SerperDevTool(BaseTool):
                 "q": query,
                 "gl": "us",  # 地理位置：美国
                 "hl": "en",  # 语言：英文
-                "num": 3  # 搜索结果数量
+                "num": 4  # 搜索结果数量
             }
             
             # 发送请求
