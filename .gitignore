@@ -5,6 +5,7 @@
 !.env.example
 *.log
 .DS_Store
+prd.md
 
 # Python相关
 __pycache__/
