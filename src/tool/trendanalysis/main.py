@@ -49,6 +49,53 @@ warnings.filterwarnings("ignore", category=UserWarning)
 plt.ioff()  # 关闭交互模式，防止图表显示
 
 
+def clean_data(df):
+    """
+    清理数据，去除无效的日期和数值
+    
+    参数:
+    df: 包含日期索引和数值的DataFrame
+    
+    返回:
+    清理后的DataFrame
+    """
+    # 尝试转换日期列，将无效日期的行标记为 NaT
+    try:
+        df.index = pd.to_datetime(df.index, errors='coerce')
+    except Exception as e:
+        print(f"警告: 日期转换过程中出现错误: {e}")
+        return None
+    
+    # 删除日期无效的行
+    invalid_dates = df.index.isna()
+    if invalid_dates.any():
+        invalid_count = invalid_dates.sum()
+        print(f"发现 {invalid_count} 行包含无效日期，将被删除")
+        df = df[~invalid_dates]
+    
+    # 确保数值列是数值类型
+    numeric_col = df.columns[0]  # 第一列应该是数值列
+    df[numeric_col] = pd.to_numeric(df[numeric_col], errors='coerce')
+    
+    # 删除数值无效的行
+    invalid_values = df[numeric_col].isna()
+    if invalid_values.any():
+        invalid_count = invalid_values.sum()
+        print(f"发现 {invalid_count} 行包含无效数值，将被删除")
+        df = df[~invalid_values]
+    
+    # 按日期排序
+    df = df.sort_index()
+    
+    # 如果清理后数据为空，返回 None
+    if len(df) == 0:
+        print("错误: 清理后没有剩余有效数据")
+        return None
+        
+    print(f"数据清理完成，保留了 {len(df)} 行有效数据")
+    return df
+
+
 def run_analysis(input_path, output_dir='results'):
     """
     运行两种趋势分析方法并比较结果
@@ -57,9 +104,26 @@ def run_analysis(input_path, output_dir='results'):
     input_path: CSV文件路径
     output_dir: 输出目录
     """
-    # 读取数据
-    df = pd.read_csv(input_path, parse_dates=['date'], index_col='date')
-    df = df.sort_index()
+    # 读取数据，不指定列名，让pandas自动使用数字索引作为列名
+    try:
+        df = pd.read_csv(input_path)
+    except Exception as e:
+        print(f"错误: 无法读取CSV文件: {e}")
+        return None
+    
+    # 检查是否至少有两列
+    if len(df.columns) < 2:
+        print("错误: CSV文件必须至少包含两列：日期列和数值列")
+        return None
+    
+    # 将第一列设置为索引，不管其列名是什么
+    df.set_index(df.columns[0], inplace=True)
+    
+    # 清理数据
+    df = clean_data(df)
+    if df is None:
+        print("错误: 数据清理失败，请检查输入文件格式")
+        return None
     
     # 创建输出目录
     os.makedirs(output_dir, exist_ok=True)
