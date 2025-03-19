@@ -79,6 +79,9 @@ DEEPSEEK_API_KEY=your-deepseek-api-key
 - https://api-docs.deepseek.com/zh-cn/
 SERPER_API_KEY=your-serper-api-key
 - https://serper.dev
+FIRECRAWL_API_KEY=
+- https://www.firecrawl.dev/app
+
 ```
 
 ### 步骤五：创建必要的目录结构
