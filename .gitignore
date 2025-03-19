@@ -13,6 +13,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+web_crawl4ai/
+webscrapy/
+websearch/
 env/
 build/
 develop-eggs/
