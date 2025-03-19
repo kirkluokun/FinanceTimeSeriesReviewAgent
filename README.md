@@ -26,7 +26,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/crewai-agent.git
+git clone https://github.com/kirkluokun/FinanceTimeSeriesReviewAgent.git
 cd crewai-agent
 ```
 
@@ -95,14 +95,6 @@ chmod -R 755 src/tech_analysis_crew/output
 chmod -R 755 results
 ```
 
-### 步骤六：验证安装
-
-```bash
-# 运行简单的测试确认环境设置正确
-python -c "import crewai; import pandas; import matplotlib; print('环境配置成功！')"
-```
-
-如果看到"环境配置成功！"消息，则说明基本环境已配置完成。
 
 ## 系统组件
 
@@ -188,20 +180,20 @@ python src/tech_analysis_crew/run_backend.py --input src/tech_analysis_crew/inpu
 系统依赖多个外部API服务，需要在`.env`文件中配置相应的密钥：
 
 ### Google Gemini API
-获取地址：https://ai.google.dev/
+
 ```
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-pro  # 可选，默认使用gemini-pro
 ```
 
 ### DeepSeek API
-获取地址：https://platform.deepseek.com/
+
 ```
 DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
 
 ### Serper API (用于网络搜索)
-获取地址：https://serper.dev/
+
 ```
 SERPER_API_KEY=your-serper-api-key
 ```
