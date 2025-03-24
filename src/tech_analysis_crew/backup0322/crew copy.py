@@ -1093,24 +1093,25 @@ class TimeSeriesAnalysisFlow():
             context=crawl_tasks  # 使用爬取任务作为上下文
         )
     
-        # return Task(
-        #     description=f"""
-        #     基于之前爬取的多篇网页内容分析，生成一份针对{query}的全面的汇总报告。
-            
-        #     请完成以下工作：
-        #     1. 你的上下文是之前多个links所爬取的网页的客观内容、主观观点
-        #     2. 带着"{query}"进行对上下文的理解和分析，总结、汇总多方面的客观和主观信息
-        #     3. 信息中如果有矛盾的地方，要进行辩证的分析，则假设你自己是query涉及的领域的绝对权威专家，根据你自己的知识理解给出合理的解释。
-        #     4. 每个观点后面要附上url来源，务必要求准确。不一定是一个观点、一个数据一个段落，你可以旁征博引，在围绕某一个观点引用多个来源的证据、数据或者专家的观点。
-            
-        #     请确保报告内容准确、全面，并提供有价值的见解。
-        #     """,
-        #     expected_output=f"""
-        #     一份结构完整的关于{query.split("after:")[0].strip()}的原因分析报告。报告使用中文撰写。
-        #     """,
-        #     agent=agent,
-        #     context=crawl_tasks  # 使用爬取任务作为上下文
-        # )
+        # def create_report_task(agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
+        #     """创建报告生成任务，依赖于爬取任务"""
+        #     return Task(
+        #         description=f"""
+        #         假设你自己是{query.split("after:")[0].strip()}涉及的领域的绝对权威专家，请完成以下工作：
+                
+        #         1. 上下文是之前多个links所爬取的网页的客观内容
+        #         2. 基于之前爬取的多篇网页内容分析，生成一份针对{query}的全面的汇总报告。
+        #         3. 侧重分析和梳理：形成趋势（涨跌、震荡或者拐点）的逻辑、背后的深层次原因
+        #         4. 在围绕某一个观点引用多个来源的证据，每个引用后面要附上url来源，务必要求准确。
+                
+        #         请确保报告内容准确、全面，并提供有价值的见解。
+        #         """,
+        #         expected_output=f"""
+        #         一份结构完整的关于{query.split("after:")[0].strip()}的原因分析报告。报告使用中文撰写。
+        #         """,
+        #         agent=agent,
+        #         context=crawl_tasks  # 使用爬取任务作为上下文
+        #     )
     
    def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
                            period_index: int, start_date: str, end_date: str) -> Task:

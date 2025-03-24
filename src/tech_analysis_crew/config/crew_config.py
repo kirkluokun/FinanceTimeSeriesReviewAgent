@@ -60,7 +60,7 @@ class CrewConfig:
         """创建报告生成代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini")
+        model_config = llm_config.get_model("gemini-2.0-pro")
         
         # 创建LLM配置
         report_llm = LLM(
@@ -151,26 +151,24 @@ class CrewConfig:
     
     @staticmethod
     def create_report_task(agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
-        """创建报告生成任务，依赖于爬取任务"""
-            
+        """Create a report generation task, dependent on crawl tasks"""
         return Task(
             description=f"""
             [TASK_TYPE:report][QUERY_TYPE:{query_type}]
-            Based on the analysis of multiple previously crawled web pages, generate a comprehensive summary report for {query}.
+            Assuming you are the absolute authority expert in the field related to {query.split("after:")[0].strip()}, please complete the following tasks:
             
-            Please complete the following tasks:
-            1. Your context consists of objective content and subjective opinions from previously crawled web pages from multiple links
-            2. Analyze and understand the context with "{query}" in mind, summarizing and compiling various objective and subjective information
-            3. If there are contradictions in the information, conduct a dialectical analysis, assuming you are an absolute authority expert in the field related to the query, and provide reasonable explanations based on your knowledge
-            4. Attach the source URL after each viewpoint, ensuring accuracy. You don't need to limit yourself to one viewpoint or one piece of data per paragraph; you can cite extensively, referencing multiple sources of evidence, data, or expert opinions around a particular viewpoint
+            1. The context is the objective content of multiple web pages crawled by previous links.
+            2. Based on the analysis of multiple web page contents crawled previously, generate a comprehensive summary report targeting {query}.
+            3. Focus on analysis and organization: form the logic of trends (rise, fall, or turning points), and the underlying deep-seated reasons.
+            4. When citing evidence from multiple sources around a certain viewpoint, ensure each citation is followed by the URL source, and accuracy is a must.
             
             Please ensure the report content is accurate, comprehensive, and provides valuable insights.
             """,
             expected_output=f"""
-            A markdown-formatted report. A structurally complete causal analysis report about {query.split("after:")[0].strip()}. The report should be written in English.
+            A structurally complete report on the causal analysis of {query.split("after:")[0].strip()}. The report is written in Chinese.
             """,
             agent=agent,
-            context=crawl_tasks  # 使用爬取任务作为上下文
+            context=crawl_tasks  # Use crawl tasks as context
         )
     
     @staticmethod
