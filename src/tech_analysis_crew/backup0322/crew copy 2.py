@@ -18,13 +18,12 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from src.tech_analysis_crew.utils.firecrawl_scrape_web_md_clean import FirecrawlScrapeMdCleanTool
 from src.llm.llm_config import llm_config
+from src.tech_analysis_crew.config import 
 from crewai import LLM
 import hashlib
 import time
 import concurrent.futures
 import traceback
-# 导入CrewConfig
-from src.tech_analysis_crew.config.crew_config import CrewConfig
 
 
 # 添加项目根目录到系统路径
@@ -937,48 +936,236 @@ class TimeSeriesAnalysisFlow():
     
     def _create_crawler_agent(self) -> Agent:
         """创建爬取代理"""
-        return CrewConfig.create_crawler_agent()
+        
+        # 使用 LLMConfig 获取模型配置
+        model_config = llm_config.get_model("gemini")
+        
+        # 创建LLM配置
+        gemini_llm = LLM(
+            provider=model_config["provider"],
+            model=model_config["model"],
+            temperature=0.7,
+            api_key=model_config["api_key"]
+        )
+        
+        # 创建爬取工具
+        crawl_tools = [FirecrawlScrapeMdCleanTool(
+            page_options={
+                "onlyMainContent": True,
+                "saveToFile": True,  # 启用保存到文件功能
+                "outputFormat": "markdown"  # 设置输出格式为markdown
+            }
+        )]
+        
+        # 创建爬取代理
+        crawler_agent = Agent(
+            role="Web Content Crawling Expert",
+            goal="Accurately extract key information related to specified questions from web content, save original content as MD files, and provide concise summaries",
+            backstory="""You are a professional web content intelligence specialist, skilled at extracting critical information from web pages with specific questions in mind.
+            Your job is to crawl content from specified URLs, summarize key points for each page, and extract essential information.
+            Important data from web pages must be recorded. You need to ensure the extracted content is accurate and complete, and provide summaries that precisely address the core issues.""",
+            verbose=True,
+            allow_delegation=False,
+            tools=crawl_tools,
+            llm=gemini_llm
+        )
+
+        # crawler_agent = Agent(
+        #     role="网页内容爬取专家",
+        #     goal="准确的从网页内容中提取与指定问题相关的关键信息，将原始内容保存为MD文件，并提供切中要点的总结",
+        #     backstory="""你是一名专业的网页内容情报搜集专家，擅长带着问题从网页中提取关键重要信息。
+        #     你的工作是爬取指定URL的内容，并对每个页面进行要点总结，提取关键信息。
+        #     网页中重要的数据要记录下来，你需要确保提取的内容准确完整，并提供切中问题要害的总结。""",
+        #     verbose=True,
+        #     allow_delegation=False,
+        #     tools=crawl_tools,
+        #     llm=gemini_llm
+        # )
+        
+        return crawler_agent
     
     def _create_report_agent(self) -> Agent:
         """创建报告生成代理"""
-        return CrewConfig.create_report_agent()
+        
+        # 使用 LLMConfig 获取模型配置
+        model_config = llm_config.get_model("gemini")
+        
+        # 创建LLM配置
+        report_llm = LLM(
+            provider=model_config["provider"],
+            model=model_config["model"],
+            temperature=0.7,
+            api_key=model_config["api_key"]
+        )
+        
+        # 创建报告代理
+        return Agent(
+            role="Skilled Financial Report Writer",
+            goal="Integrate intelligence information and generate comprehensive reports",
+            backstory="""You are a financial analyst skilled at writing reports, with expertise in integrating and analyzing information.
+            Your job is to take the prepared intelligence information from searches and write a complete report.
+            You need to ensure the report has a clear structure, accurate content, and provides valuable, in-depth insights.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=report_llm
+        )
+
+        # return Agent(
+        #     role="善于撰写报告的金融分析师",
+        #     goal="整合情报信息，生成全面的报告",
+        #     backstory="""你是一名善于撰写报告的金融分析师，擅长整合和分析信息。
+        #     你的工作是将已经准备好的检索的情报信息，撰写一份完整的报告。
+        #     你需要确保报告结构清晰，内容准确，并提供有价值、深度的见解。""",
+        #     verbose=True,
+        #     allow_delegation=False,
+        #     llm=report_llm
+        # )
     
     def _create_conclusion_agent(self) -> Agent:
         """创建总结代理"""
-        return CrewConfig.create_conclusion_agent()
+        
+        # 使用 LLMConfig 获取模型配置
+        model_config = llm_config.get_model("deepseek-v3-ARK")
+        
+        # 创建LLM配置
+        conclusion_llm = LLM(
+            provider=model_config["provider"],
+            model=model_config["model"],
+            temperature=0.7,
+            api_key=model_config["api_key"],
+            base_url=model_config["base_url"]
+        )
+        
+        # 创建总结代理
+        conclusion_agent = Agent(
+            role="Comprehensive Analysis Expert",
+            goal="Synthesize multiple reports, extract core insights, and generate in-depth comprehensive analysis",
+            backstory="""You are a seasoned comprehensive analysis expert, skilled at examining issues from multiple perspectives and forming holistic views.
+            You can organically integrate information from different reports, identify commonalities and differences, and reveal underlying patterns.
+            You excel at grasping macro trends while paying attention to micro details, enabling readers to fully understand the logic behind market changes.
+            Your analysis has both historical depth and forward-looking vision, providing readers with comprehensive and valuable market insights.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=conclusion_llm
+        )
+
+        # conclusion_agent = Agent(
+        #     role="汇总分析专家",
+        #     goal="综合多份报告，提炼核心洞察，生成全面深入的综合分析",
+        #     backstory="""你是一位资深的综合分析专家，擅长从多角度分析问题并形成整体观点。
+        #     你能够将不同报告中的信息有机整合，识别共性和差异，揭示深层规律。
+        #     你长于把握宏观大势，同时注重微观细节，能够让读者全面理解市场变化背后的逻辑。
+        #     你的分析既有历史纵深感，又有前瞻性，为读者提供全面且有价值的市场洞察。""",
+        #     verbose=True,
+        #     allow_delegation=False,
+        #     llm=conclusion_llm
+        # )
+        
+        return conclusion_agent
     
     def _create_crawler_task(self, url: str, query: str, date: str, agent: Agent, query_type: str) -> Task:
         """创建爬取任务"""
-        return CrewConfig.create_crawler_task(
-            url=url,
-            query=query,
-            date=date,
+        # 生成唯一的文件名
+        # 使用URL、查询关键词和日期的组合创建哈希，确保文件名唯一性
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        query_hash = hashlib.md5(query.encode()).hexdigest()[:4]
+        date_str = date.replace('-', '') if date else "nodate"
+        cache_filename = f"{url_hash}_{query_hash}_{date_str}.md"
+        cache_path = os.path.join(self.state.output_dirs["cache_dir"], cache_filename)
+
+        return Task(
+            description=f"""
+            [TASK_TYPE:crawler][QUERY_TYPE:{query_type}]
+
+            Use the Firecrawl tool to scrape content from the following URL: {url}
+            
+            Please complete the following tasks:
+            1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
+            2. Analyze the content with the question "{query}" in mind, noting that the article was published on "{date}", please consider the historical context
+            3. Summarize key information related to the "{self.state.indicator_description}" financial indicator from the page content, including important events, significant data, and key viewpoints, especially focusing on content that reflects deep-level logic
+            4. Ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
+            
+            Note: You must save the original scraped webpage content in Markdown format to the specified file path. This is an important step to ensure the analysis process is traceable and reproducible.
+            """,
+            expected_output=f"""
+            A retrospective analysis report based on the page content about "{query}", focusing on analyzing factors affecting the {self.state.indicator_description} financial indicator.
+            The report should include the source URL at the end, formatted as:
+            # Source URL
+            [https://www.google.com](https://www.google.com)
+            """,
             agent=agent,
-            query_type=query_type,
-            indicator_description=self.state.indicator_description,
-            cache_dir=self.state.output_dirs.get("cache_dir", "")
+            # 增加执行控制参数
+            max_execution_time=30,  # 30秒超时
         )
     
     def _create_report_task(self, agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
         """创建报告生成任务，依赖于爬取任务"""
-        return CrewConfig.create_report_task(
+        # 如果没有传入query_type，则从查询中提取
+        if query_type is None:
+            query_type = "unknown"
+            if "trend_query" in query.lower():
+                query_type = "trend_query"
+            elif "high_price_query" in query.lower():
+                query_type = "high_price_query"
+            elif "low_price_query" in query.lower():
+                query_type = "low_price_query"
+            
+        return Task(
+            description=f"""
+            [TASK_TYPE:report][QUERY_TYPE:{query_type}]
+            Based on the analysis of multiple previously crawled web pages, generate a comprehensive summary report for {query}.
+            
+            Please complete the following tasks:
+            1. Your context consists of objective content and subjective opinions from previously crawled web pages from multiple links
+            2. Analyze and understand the context with "{query}" in mind, summarizing and compiling various objective and subjective information
+            3. If there are contradictions in the information, conduct a dialectical analysis, assuming you are an absolute authority expert in the field related to the query, and provide reasonable explanations based on your knowledge
+            4. Attach the source URL after each viewpoint, ensuring accuracy. You don't need to limit yourself to one viewpoint or one piece of data per paragraph; you can cite extensively, referencing multiple sources of evidence, data, or expert opinions around a particular viewpoint
+            
+            Please ensure the report content is accurate, comprehensive, and provides valuable insights.
+            """,
+            expected_output=f"""
+            A markdown-formatted report. A structurally complete causal analysis report about {query.split("after:")[0].strip()}. The report should be written in English.
+            """,
             agent=agent,
-            crawl_tasks=crawl_tasks,
-            query=query,
-            query_type=query_type
+            context=crawl_tasks  # 使用爬取任务作为上下文
         )
+    
     
     def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
                            period_index: int, start_date: str, end_date: str) -> Task:
         """创建时间段总结任务，依赖于报告任务"""
-        return CrewConfig.create_conclusion_task(
+        from crewai import Task
+        
+        # 创建任务描述
+        task_description = f"""
+        [TASK_TYPE:conclusion]
+        基于三种查询(trend_query, high_price_query, low_price_query)的分析报告，
+        为时间段{period_index}({start_date}至{end_date})撰写一份区间内全面的复盘总结报告。
+        
+        请完成以下工作：
+        1. 综合分析三种查询报告的内容
+        2. 详细阐述该时间区间{self.state.indicator_description}价格走势的逻辑
+        3. 深入分析区间高点和低点所发生的重要事件及其影响
+        4. 揭示价格变动背后的根本原因和市场逻辑
+        5. 提炼出该时间段最关键的洞察和结论
+        
+        请确保报告内容系统、全面、深入，并给出有价值的市场洞察。报告使用中文撰写。
+        """
+        
+        expected_output = f"""
+        一份markdown格式的报告，针对{start_date}至{end_date}期间{self.state.indicator_description}价格走势的全面复盘总结报告，
+        深入分析期间价格变动的原因、高低点事件及市场驱动的底层逻辑。报告使用中文撰写。观点来源url附在报告最后。
+        """
+        
+        # 创建总结任务
+        conclusion_task = Task(
+            description=task_description,
+            expected_output=expected_output,
             agent=agent,
-            report_tasks=report_tasks,
-            period_index=period_index,
-            start_date=start_date,
-            end_date=end_date,
-            indicator_description=self.state.indicator_description
+            context=report_tasks  # 使用报告任务作为上下文
         )
+        
+        return conclusion_task
 
 
     def _generate_period_report(self, tasks: List[Task], period_index: int) -> str:
