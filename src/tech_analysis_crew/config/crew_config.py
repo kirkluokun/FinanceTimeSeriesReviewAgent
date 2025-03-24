@@ -114,7 +114,7 @@ class CrewConfig:
         return conclusion_agent
     
     @staticmethod
-    def create_crawler_task(url: str, query: str, date: str, agent: Agent, query_type: str, indicator_description: str, cache_dir: str) -> Task:
+    def create_crawler_task(url: str, query: str, date: str, agent: Agent, query_type: str, indicator_description: str, cache_dir: str, market_data_context: str = "") -> Task:
         """创建爬取任务"""
         # 生成唯一的文件名
         # 使用URL、查询关键词和日期的组合创建哈希，确保文件名唯一性
@@ -133,16 +133,18 @@ class CrewConfig:
             Please complete the following tasks:
             1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
             2. Analyze the content with the question "{query}" in mind, noting that the article was published on "{date}", please consider the historical context
+            
+            {market_data_context}
+            
             3. Summarize key information related to the "{indicator_description}" financial indicator from the page content, including important events, significant data, and key viewpoints, especially focusing on content that reflects deep-level logic
-            4. Ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
+            4. If market data is provided above, identify connections between market movements and events/news described in the article
+            5. Ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
             
             Note: You must save the original scraped webpage content in Markdown format to the specified file path. This is an important step to ensure the analysis process is traceable and reproducible.
             """,
             expected_output=f"""
             A retrospective analysis report based on the page content about "{query}", focusing on analyzing factors affecting the {indicator_description} financial indicator.
-            The report should include the source URL at the end, formatted as:
-            # Source URL
-            [https://www.google.com](https://www.google.com)
+            The report should include references to market data (if provided) and the source URL at the end.
             """,
             agent=agent,
             # 增加执行控制参数
@@ -151,24 +153,23 @@ class CrewConfig:
     
     @staticmethod
     def create_report_task(agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
-        """Create a report generation task, dependent on crawl tasks"""
+        """创建报告生成任务，依赖于爬取任务"""
         return Task(
             description=f"""
-            [TASK_TYPE:report][QUERY_TYPE:{query_type}]
-            Assuming you are the absolute authority expert in the field related to {query.split("after:")[0].strip()}, please complete the following tasks:
+            假设你自己是{query.split("after:")[0].strip()}涉及的领域的绝对权威专家，请完成以下工作：
             
-            1. The context is the objective content of multiple web pages crawled by previous links.
-            2. Based on the analysis of multiple web page contents crawled previously, generate a comprehensive summary report targeting {query}.
-            3. Focus on analysis and organization: form the logic of trends (rise, fall, or turning points), and the underlying deep-seated reasons.
-            4. When citing evidence from multiple sources around a certain viewpoint, ensure each citation is followed by the URL source, and accuracy is a must.
+            1. 上下文是之前多个links所爬取的网页的客观内容
+            2. 基于之前爬取的多篇网页内容分析，生成一份针对{query}的全面的汇总报告。
+            3. 侧重分析和梳理：形成趋势（涨跌、震荡或者拐点）的逻辑、背后的深层次原因
+            4. 在围绕某一个观点引用多个来源的证据，每个引用后面要附上url来源，务必要求准确。
             
-            Please ensure the report content is accurate, comprehensive, and provides valuable insights.
+            请确保报告内容准确、全面，并提供有价值的见解。
             """,
             expected_output=f"""
-            A structurally complete report on the causal analysis of {query.split("after:")[0].strip()}. The report is written in Chinese.
+            一份结构完整的关于{query.split("after:")[0].strip()}的原因分析报告。报告使用中文撰写。
             """,
             agent=agent,
-            context=crawl_tasks  # Use crawl tasks as context
+            context=crawl_tasks  # 使用爬取任务作为上下文
         )
     
     @staticmethod

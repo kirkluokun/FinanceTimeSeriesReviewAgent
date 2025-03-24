@@ -22,6 +22,7 @@ from crewai import LLM
 import hashlib
 import time
 import concurrent.futures
+import threading
 import traceback
 # 导入CrewConfig
 from src.tech_analysis_crew.config.crew_config import CrewConfig
@@ -691,12 +692,12 @@ class TimeSeriesAnalysisFlow():
     
 
     def crawl_web_content(self, summary: Dict[str, Any]) -> Dict[str, Any]:
-        """1爬取网页内容并生成分析报告
+        """爬取网页内容并生成分析报告
         
         按照时间段顺序处理：
         1. 对每个时间段，顺序处理其中的三种查询
-        2. 对每种查询，分别爬取其包含的链接，生成内容总结
-        3. 对每种查询生成一个报告
+        2. 对每种查询，并行爬取其包含的链接，生成内容总结
+        3. 所有链接爬取完成后，对每种查询生成一个报告
         4. 汇总三个查询报告，生成时间段总结报告
         5. 拼接所有时间段报告生成最终报告
         """
@@ -711,8 +712,8 @@ class TimeSeriesAnalysisFlow():
             logger.info(f"\n开始处理时间段 {period_index}/{len(summary['periods'])}: "
                   f"{period.get('start_date')} 到 {period.get('end_date')}")
             
-            # 处理单个时间段
-            period_result = self._process_period(period, period_index)
+            # 处理单个时间段（使用并行处理）
+            period_result = self._process_period_parallel(period, period_index)
             
             # 收集结果
             period_reports[period_index] = period_result["period_report"]
@@ -752,14 +753,13 @@ class TimeSeriesAnalysisFlow():
             "final_report_path": final_report_path
         }
     
-    def _process_period(self, period: Dict[str, Any], period_index: int) -> Dict[str, Any]:
-        """处理单个时间段的所有查询和链接"""
-        logger.info(f"处理时间段 {period_index} 的查询...")
+    def _process_period_parallel(self, period: Dict[str, Any], period_index: int) -> Dict[str, Any]:
+        """并行处理单个时间段的所有查询和链接"""
+        logger.info(f"并行处理时间段 {period_index} 的查询...")
         
         # 确保cache目录存在
         cache_dir = self.state.output_dirs.get("cache_dir", "")
         if not cache_dir:
-            # 如果cache_dir不存在，创建一个
             cache_dir = os.path.join(self.state.output_dirs["base_output_dir"], "cache")
             self.state.output_dirs["cache_dir"] = cache_dir
             
@@ -770,15 +770,21 @@ class TimeSeriesAnalysisFlow():
         period_start_date = period.get("start_date")
         period_end_date = period.get("end_date")
         
+        # 获取真实的市场数据
+        market_data = None
+        if period_index < len(self.state.time_series_data):
+            market_data = self.state.time_series_data[period_index]
+            logger.info(f"获取到时间段 {period_index} 的市场数据: {market_data['start_date']} - {market_data['end_date']}")
+        else:
+            logger.warning(f"无法获取时间段 {period_index} 的市场数据,索引超出范围")
         
-        # 创建爬虫和报告生成Agent
+        # 创建Agent
         crawler_agent = self._create_crawler_agent()
         report_agent = self._create_report_agent()
         conclusion_agent = self._create_conclusion_agent()
         
-        # 收集所有任务
-        all_tasks = []
-        query_tasks = {}  # 按查询类型存储任务
+        # 存储所有查询类型的爬取结果
+        query_results = {}
         
         # 处理三种查询类型
         query_types = ["trend_query", "high_price_query", "low_price_query"]
@@ -795,56 +801,99 @@ class TimeSeriesAnalysisFlow():
                     logger.info(f"没有找到有效的 {query_type} 查询或链接，跳过")
                     continue
                 
-                # 创建该查询的所有爬取任务
-                crawl_tasks = self._create_query_tasks(
-                    query_type, 
-                    query, 
-                    query_data["links"], 
+                # 并行爬取该查询类型的所有链接
+                crawl_results = self._parallel_crawl_links(
+                    query_type,
+                    query,
+                    query_data["links"],
                     crawler_agent,
-                    period_index
+                    period_index,
+                    cache_dir,
+                    market_data  # 传递真实市场数据
                 )
                 
-                # 添加到所有任务列表
-                all_tasks.extend(crawl_tasks)
+                # 存储爬取结果
+                query_results[query_type] = {
+                    "query": query,
+                    "crawl_results": crawl_results,
+                    "links": query_data["links"]
+                }
                 
-                # 创建报告任务，依赖于爬取任务
-                report_task = self._create_report_task(report_agent, crawl_tasks, query, query_type)
-                all_tasks.append(report_task)
-                
-                # 存储报告任务
-                query_tasks[query_type] = report_task
+                logger.info(f"查询类型 {query_type} 的 {len(crawl_results)} 个链接爬取完成")
         
-        # 创建总结任务，依赖于所有报告任务
+        # 生成各查询类型的报告
+        report_tasks = {}
+        for query_type, data in query_results.items():
+            logger.info(f"为查询类型 {query_type} 生成报告...")
+            
+            # 创建报告任务
+            report_task = self._create_report_from_crawl_results(
+                report_agent,
+                data["crawl_results"],
+                data["query"],
+                query_type
+            )
+            
+            # 存储报告任务
+            report_tasks[query_type] = report_task
+        
+        # 如果没有报告任务，返回空结果
+        if not report_tasks:
+            logger.error(f"时间段 {period_index} 没有生成任何报告任务")
+            period_report = f"## 时间段 {period_index} 报告\n\n未能爬取到有效内容，请检查网络连接或调整查询条件。"
+            
+            # 保存空报告
+            period_report_dir = os.path.join(self.state.output_dirs["final_report_dir"])
+            os.makedirs(period_report_dir, exist_ok=True)
+            period_report_path = os.path.join(period_report_dir, f"period_{period_index}_report.md")
+            
+            with open(period_report_path, 'w', encoding='utf-8') as f:
+                f.write(period_report)
+            
+            return {
+                "period_report": period_report,
+                "crawled_contents": {}
+            }
+        
+        # 创建总结任务
         conclusion_task = self._create_conclusion_task(
-            conclusion_agent, 
-            list(query_tasks.values()),
+            conclusion_agent,
+            list(report_tasks.values()),
             period_index,
             period_start_date,
             period_end_date
         )
-        all_tasks.append(conclusion_task)
         
-        # 创建 Crew 来执行所有任务
-        period_crew = Crew(
-            agents=[crawler_agent, report_agent, conclusion_agent],
+        # 创建包含所有报告任务和总结任务的Crew
+        all_agents = [report_agent, conclusion_agent]
+        all_tasks = list(report_tasks.values()) + [conclusion_task]
+        
+        report_crew = Crew(
+            agents=all_agents,
             tasks=all_tasks,
             verbose=True
         )
         
-        # 执行所有任务
-        period_crew.kickoff()
-
-        # 获取成功完成的任务结果
+        # 执行报告和总结任务
+        report_crew.kickoff()
+        
+        # 收集所有爬取内容
+        all_crawled_contents = {}
+        for results in query_results.values():
+            for url, content in results["crawl_results"].items():
+                if content and url:
+                    all_crawled_contents[url] = content
+        
+        # 生成时间段报告
         successful_tasks = [task for task in all_tasks if hasattr(task, 'output') and task.output]
         
-        # 获取总结报告
+        # 生成综合报告
         period_report = ""
         if successful_tasks:
-            # 获取总结报告
             period_report = self._generate_period_report(successful_tasks, period_index)
         else:
-            period_report = f"## 时间段 {period_index} 报告\n\n所有链接爬取均超时或失败，请检查网络连接或调整查询条件。"
-            logger.error(f"时间段 {period_index} 所有任务均失败")
+            period_report = f"## 时间段 {period_index} 报告\n\n所有报告任务均失败，请检查网络连接或调整查询条件。"
+            logger.error(f"时间段 {period_index} 所有报告任务均失败")
         
         # 保存时间段报告
         period_report_dir = os.path.join(self.state.output_dirs["final_report_dir"])
@@ -856,65 +905,207 @@ class TimeSeriesAnalysisFlow():
         
         logger.info(f"时间段 {period_index} 报告已保存至: {period_report_path}")
         
-        # 记录cache目录中保存的文件数量
-        if os.path.exists(cache_dir):
-            cached_files = [f for f in os.listdir(cache_dir) if f.endswith('.md')]
-            logger.info(f"缓存目录 {cache_dir} 中共有 {len(cached_files)} 个网页内容文件")
-        
-        # 提取爬取任务的内容
-        crawled_contents = {}
-        
-        # 从成功的爬取任务中提取内容
-        for task in successful_tasks:
-            if "爬取URL的内容" in task.description or "Use the Firecrawl tool to scrape content" in task.description:
-                try:
-                    # 从任务描述中提取URL
-                    url = ""
-                    if "爬取URL的内容" in task.description:
-                        url = task.description.split("爬取URL的内容：")[1].split("\n")[0].strip()
-                    elif "URL:" in task.description:
-                        url = task.description.split("URL:")[1].split("\n")[0].strip()
-                    
-                    # 如果找不到URL，尝试另一种格式
-                    if not url and "from the following URL:" in task.description:
-                        url = task.description.split("from the following URL:")[1].split("\n")[0].strip()
-                    
-                    if url:
-                        # 将爬取内容添加到字典中
-                        crawled_contents[url] = str(task.output)
-                        logger.info(f"已保存URL={url}的爬取内容，长度={len(str(task.output))}")
-                except Exception as e:
-                    logger.error(f"处理爬取任务时出错: {str(e)}")
-        
         return {
             "period_report": period_report,
-            "crawled_contents": crawled_contents  # 返回实际爬取的内容
+            "crawled_contents": all_crawled_contents
         }
     
-    def _create_query_tasks(self, query_type: str, query: str, links: List[Dict[str, Any]], 
-                       crawler_agent: Agent, period_index: int) -> List[Task]:
-        """创建单个查询的所有爬取任务"""
-        logger.info(f"为查询 '{query}' 创建 {len(links)} 个爬取任务...")
+    def _parallel_crawl_links(self, query_type: str, query: str, links: List[Dict[str, Any]], 
+                              crawler_agent: Agent, period_index: int, cache_dir: str, period_data: Dict[str, Any] = None) -> Dict[str, str]:
+        """并行爬取多个链接
         
+        Args:
+            query_type: 查询类型
+            query: 查询内容
+            links: 链接列表
+            crawler_agent: 爬虫代理
+            period_index: 时间段索引
+            cache_dir: 缓存目录
+            period_data: 时间段的市场数据
+            
+        Returns:
+            Dict[url, content] 爬取结果字典
+        """
+        logger.info(f"开始并行爬取 {query_type} 查询下的 {len(links)} 个链接...")
+        
+        # 结果集
+        crawl_results = {}
+        
+        # 创建一个线程安全的锁
+        lock = threading.Lock()
+        
+        # 创建爬取任务列表
         crawl_tasks = []
         
         # 为每个链接创建爬取任务
-        for link_index, link in enumerate(links):
+        for link in links:
             url = link.get("link", "")
-            
             if not url:
-                logger.info(f"链接 {link_index} 无效，跳过")
                 continue
-            
-            logger.info(f"为链接 {link_index+1}/{len(links)} 创建爬取任务: {url}, 查询类型: {query_type}")
-            
-            # 创建爬取任务，明确传递query_type参数
+                
             date = link.get("date", "")
-            crawl_task = self._create_crawler_task(url, query, date, crawler_agent, query_type)
-            crawl_tasks.append(crawl_task)
+            task = self._create_crawler_task(url, query, date, crawler_agent, query_type, period_data)
+            crawl_tasks.append((task, url))
         
-        return crawl_tasks
+        # 创建一个线程池
+        max_workers = min(len(crawl_tasks), 5)  # 限制最大并行数
+        
+        def execute_task(task_data):
+            task, url = task_data
+            try:
+                # 创建一个单任务的Crew
+                task_crew = Crew(
+                    agents=[crawler_agent],
+                    tasks=[task],
+                    verbose=True
+                )
+                
+                # 执行爬取任务
+                result = task_crew.kickoff()
+                
+                # 将结果保存到文件
+                url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+                crawler_report_path = os.path.join(
+                    cache_dir, 
+                    f"period_{period_index}_{query_type}_crawler_{url_hash}.md"
+                )
+                
+                with open(crawler_report_path, 'w', encoding='utf-8') as f:
+                    f.write(f"# 爬取结果: {url}\n\n")
+                    f.write(str(task.output))
+                
+                logger.info(f"链接 {url} 爬取完成，结果已保存至: {crawler_report_path}")
+                
+                # 将结果添加到结果集
+                with lock:
+                    crawl_results[url] = str(task.output)
+                
+                return url, result
+            except Exception as e:
+                logger.error(f"爬取链接 {url} 时出错: {str(e)}")
+                logger.error(traceback.format_exc())
+                return url, None
+        
+        # 使用线程池并行执行爬取任务
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(execute_task, task_data) for task_data in crawl_tasks]
+            
+            # 等待所有任务完成
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    url, result = future.result()
+                    logger.info(f"链接 {url} 的爬取任务已完成")
+                except Exception as e:
+                    logger.error(f"处理爬取任务结果时出错: {str(e)}")
+        
+        logger.info(f"查询类型 {query_type} 的 {len(links)} 个链接已全部处理完成，成功爬取 {len(crawl_results)} 个")
+        
+        return crawl_results
     
+    def _create_report_from_crawl_results(self, agent: Agent, crawl_results: Dict[str, str], 
+                                          query: str, query_type: str) -> Task:
+        """从爬取结果创建报告任务
+        
+        Args:
+            agent: 报告生成代理
+            crawl_results: 爬取结果字典 {url: content}
+            query: 查询内容
+            query_type: 查询类型
+            
+        Returns:
+            报告任务
+        """
+        # 直接创建描述，不使用mock对象，避免raw属性问题
+        description = f"""
+            [TASK_TYPE:report][QUERY_TYPE:{query_type}]
+            Assuming you are the absolute authority expert in the field related to {query.split("after:")[0].strip()}, please complete the following tasks:
+            
+            1. The context is the objective content of multiple web pages crawled by previous links.
+            2. Based on the analysis of multiple web page contents crawled previously, generate a comprehensive summary report targeting {query}.
+            3. Focus on analysis and organization: form the logic of trends (rise, fall, or turning points), and the underlying deep-seated reasons.
+            4. When citing evidence from multiple sources around a certain viewpoint, ensure each citation is followed by the URL source, and accuracy is a must.
+            
+            Please ensure the report content is accurate, comprehensive, and provides valuable insights.
+
+            The following is the crawled content:
+            """
+        
+        # 添加爬取结果到描述中
+        for url, content in crawl_results.items():
+            # 不再限制内容长度，使用完整内容
+            description += f"\n--- 来源: {url} ---\n\n{content}\n\n"
+        
+        # 直接创建Task对象
+        return Task(
+            description=description,
+            expected_output=f"""
+            A structurally complete report on the causal analysis of {query.split("after:")[0].strip()}. The report is written in Chinese.
+            """,
+            agent=agent,
+            async_execution=False
+        )
+
+    def _create_crawler_agent(self) -> Agent:
+        """创建爬取代理"""
+        return CrewConfig.create_crawler_agent()
+    
+    def _create_report_agent(self) -> Agent:
+        """创建报告生成代理"""
+        return CrewConfig.create_report_agent()
+    
+    def _create_conclusion_agent(self) -> Agent:
+        """创建总结代理"""
+        return CrewConfig.create_conclusion_agent()
+    
+    def _create_crawler_task(self, url: str, query: str, date: str, agent: Agent, 
+                             query_type: str, period_data: Dict[str, Any] = None) -> Task:
+        """创建爬取任务
+        
+        Args:
+            url: 爬取的URL
+            query: 查询内容
+            date: 相关日期
+            agent: 爬虫代理
+            query_type: 查询类型
+            period_data: 时间段的市场数据
+        """
+        # 构建市场数据部分
+        market_data_context = ""
+        if period_data:
+            market_data_context = f"""
+            市场数据参考:
+            - 区间: {period_data['start_date']} 至 {period_data['end_date']}
+            - 价格变化: {period_data['start_price']} → {period_data['end_price']} ({period_data['pct_change']*100:.2f}%)
+            - 最高价: {period_data['high_price']} (日期: {period_data['high_price_date']})
+            - 最低价: {period_data['low_price']} (日期: {period_data['low_price_date']})
+            - 持续天数: {period_data['duration']}天
+            - 趋势类型: {period_data['trend_type']}
+            """
+        
+        return CrewConfig.create_crawler_task(
+            url=url,
+            query=query,
+            date=date,
+            agent=agent,
+            query_type=query_type,
+            indicator_description=self.state.indicator_description,
+            cache_dir=self.state.output_dirs.get("cache_dir", ""),
+            market_data_context=market_data_context  # 新增参数
+        )
+    
+    def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
+                           period_index: int, start_date: str, end_date: str) -> Task:
+        """创建时间段总结任务，依赖于报告任务"""
+        return CrewConfig.create_conclusion_task(
+            agent=agent,
+            report_tasks=report_tasks,
+            period_index=period_index,
+            start_date=start_date,
+            end_date=end_date,
+            indicator_description=self.state.indicator_description
+        )
+
+
     def _generate_final_markdown(self, period_reports: Dict[int, str]) -> str:
         """拼接所有时间段报告生成最终报告"""
         logger.info("生成最终Markdown报告...")
@@ -935,52 +1126,6 @@ class TimeSeriesAnalysisFlow():
         
         return final_report
     
-    def _create_crawler_agent(self) -> Agent:
-        """创建爬取代理"""
-        return CrewConfig.create_crawler_agent()
-    
-    def _create_report_agent(self) -> Agent:
-        """创建报告生成代理"""
-        return CrewConfig.create_report_agent()
-    
-    def _create_conclusion_agent(self) -> Agent:
-        """创建总结代理"""
-        return CrewConfig.create_conclusion_agent()
-    
-    def _create_crawler_task(self, url: str, query: str, date: str, agent: Agent, query_type: str) -> Task:
-        """创建爬取任务"""
-        return CrewConfig.create_crawler_task(
-            url=url,
-            query=query,
-            date=date,
-            agent=agent,
-            query_type=query_type,
-            indicator_description=self.state.indicator_description,
-            cache_dir=self.state.output_dirs.get("cache_dir", "")
-        )
-    
-    def _create_report_task(self, agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
-        """创建报告生成任务，依赖于爬取任务"""
-        return CrewConfig.create_report_task(
-            agent=agent,
-            crawl_tasks=crawl_tasks,
-            query=query,
-            query_type=query_type
-        )
-    
-    def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
-                           period_index: int, start_date: str, end_date: str) -> Task:
-        """创建时间段总结任务，依赖于报告任务"""
-        return CrewConfig.create_conclusion_task(
-            agent=agent,
-            report_tasks=report_tasks,
-            period_index=period_index,
-            start_date=start_date,
-            end_date=end_date,
-            indicator_description=self.state.indicator_description
-        )
-
-
     def _generate_period_report(self, tasks: List[Task], period_index: int) -> str:
         """
         生成单个时间段的综合报告，汇总所有查询的报告
@@ -1258,13 +1403,13 @@ class TimePeriodAnalysisFlow(Flow):
             trend_query = f"{indicator} after:{start_date} before:{end_date}"
             
         # 计算高价日期前后7天的时间范围
-        high_before_date = self._date_offset(high_price_date, -7)
-        high_after_date = self._date_offset(high_price_date, 7)
+        high_before_date = self._date_offset(high_price_date, -3)
+        high_after_date = self._date_offset(high_price_date, 5)
         high_price_query = f"{indicator} hit peak after:{high_before_date} before:{high_after_date}"
         
         # 计算低价日期前后7天的时间范围
-        low_before_date = self._date_offset(low_price_date, -7)
-        low_after_date = self._date_offset(low_price_date, 7)
+        low_before_date = self._date_offset(low_price_date, -3)
+        low_after_date = self._date_offset(low_price_date, 5)
         low_price_query = f"{indicator} bottom out after:{low_before_date} before:{low_after_date}"
         
         # 组合三种查询
