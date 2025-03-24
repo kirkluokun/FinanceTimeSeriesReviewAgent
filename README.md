@@ -1,3 +1,8 @@
+
+python src/tech_analysis_crew/run_backend.py --input src/tech_analysis_crew/input/cu.csv --query "帮我复盘comex铜价"
+
+
+
 # 时间序列分析与趋势挖掘系统
 
 一个完整的时间序列数据分析系统，结合了趋势自动识别和基于CrewAI的深度原因分析。该系统能够自动处理CSV格式的时间序列数据，识别价格趋势，并分析价格变动原因。

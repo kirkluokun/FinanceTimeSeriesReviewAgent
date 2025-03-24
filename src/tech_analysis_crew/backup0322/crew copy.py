@@ -22,7 +22,6 @@ from crewai import LLM
 import hashlib
 import time
 import concurrent.futures
-import traceback
 
 # 添加项目根目录到系统路径
 current_file = os.path.abspath(__file__)
@@ -407,7 +406,7 @@ class TimeSeriesAnalysisFlow():
             async_execution=task_config.get("async_execution", False)
         )
     
-    # @start()
+    @start()
     def initialize_job(self):
         """初始化作业，生成作业ID并准备目录"""
         print("初始化作业...")
@@ -429,7 +428,7 @@ class TimeSeriesAnalysisFlow():
         
         return job_id
     
-    # @listen(initialize_job)
+    @listen(initialize_job)
     def process_input_data(self, job_id: str):
         """处理输入数据
         
@@ -497,7 +496,7 @@ class TimeSeriesAnalysisFlow():
                 self.on_error(str(e))
             raise
     
-    # @listen(process_input_data)
+    @listen(process_input_data)
     def analyze_time_periods(self, processed_data: Dict[str, Any]):
         """分析所有时间段"""
         print("开始分析时间段...")
@@ -707,7 +706,7 @@ class TimeSeriesAnalysisFlow():
         
         # 按照时间段顺序处理
         for period_index, period in enumerate(summary["periods"]):
-            logger.info(f"\n开始处理时间段 {period_index}/{len(summary['periods'])}: "
+            logger.info(f"\n开始处理时间段 {period_index+1}/{len(summary['periods'])}: "
                   f"{period.get('start_date')} 到 {period.get('end_date')}")
             
             # 处理单个时间段
@@ -717,7 +716,7 @@ class TimeSeriesAnalysisFlow():
             period_reports[period_index] = period_result["period_report"]
             all_crawled_contents.update(period_result["crawled_contents"])
             
-            logger.info(f"时间段 {period_index} 处理完成")
+            logger.info(f"时间段 {period_index+1} 处理完成")
         
         # 保存所有爬取内容
         crawl_result_path = os.path.join(
@@ -807,7 +806,7 @@ class TimeSeriesAnalysisFlow():
                 all_tasks.extend(crawl_tasks)
                 
                 # 创建报告任务，依赖于爬取任务
-                report_task = self._create_report_task(report_agent, crawl_tasks, query, query_type)
+                report_task = self._create_report_task(report_agent, crawl_tasks, query)
                 all_tasks.append(report_task)
                 
                 # 存储报告任务
@@ -831,7 +830,7 @@ class TimeSeriesAnalysisFlow():
         )
         
         # 执行所有任务
-        period_crew.kickoff()
+        crew_result = period_crew.kickoff()
 
         # 获取成功完成的任务结果
         successful_tasks = [task for task in all_tasks if hasattr(task, 'output') and task.output]
@@ -860,34 +859,9 @@ class TimeSeriesAnalysisFlow():
             cached_files = [f for f in os.listdir(cache_dir) if f.endswith('.md')]
             logger.info(f"缓存目录 {cache_dir} 中共有 {len(cached_files)} 个网页内容文件")
         
-        # 提取爬取任务的内容
-        crawled_contents = {}
-        
-        # 从成功的爬取任务中提取内容
-        for task in successful_tasks:
-            if "爬取URL的内容" in task.description or "Use the Firecrawl tool to scrape content" in task.description:
-                try:
-                    # 从任务描述中提取URL
-                    url = ""
-                    if "爬取URL的内容" in task.description:
-                        url = task.description.split("爬取URL的内容：")[1].split("\n")[0].strip()
-                    elif "URL:" in task.description:
-                        url = task.description.split("URL:")[1].split("\n")[0].strip()
-                    
-                    # 如果找不到URL，尝试另一种格式
-                    if not url and "from the following URL:" in task.description:
-                        url = task.description.split("from the following URL:")[1].split("\n")[0].strip()
-                    
-                    if url:
-                        # 将爬取内容添加到字典中
-                        crawled_contents[url] = str(task.output)
-                        logger.info(f"已保存URL={url}的爬取内容，长度={len(str(task.output))}")
-                except Exception as e:
-                    logger.error(f"处理爬取任务时出错: {str(e)}")
-        
         return {
             "period_report": period_report,
-            "crawled_contents": crawled_contents  # 返回实际爬取的内容
+            "crawled_contents": {}  # 不再需要存储爬取内容
         }
     
     def _create_query_tasks(self, query_type: str, query: str, links: List[Dict[str, Any]], 
@@ -905,11 +879,11 @@ class TimeSeriesAnalysisFlow():
                 logger.info(f"链接 {link_index} 无效，跳过")
                 continue
             
-            logger.info(f"为链接 {link_index+1}/{len(links)} 创建爬取任务: {url}, 查询类型: {query_type}")
+            logger.info(f"为链接 {link_index+1}/{len(links)} 创建爬取任务: {url}")
             
-            # 创建爬取任务，明确传递query_type参数
+            # 创建爬取任务
             date = link.get("date", "")
-            crawl_task = self._create_crawler_task(url, query, date, crawler_agent, query_type)
+            crawl_task = self._create_crawler_task(url, query, date, crawler_agent)
             crawl_tasks.append(crawl_task)
         
         return crawl_tasks
@@ -928,7 +902,7 @@ class TimeSeriesAnalysisFlow():
         
         for period_index in sorted_periods:
             period_report = period_reports[period_index]
-            final_report += f"\n\n## 时间段 {period_index}\n\n"
+            final_report += f"\n\n## 时间段 {period_index+1}\n\n"
             final_report += period_report
             final_report += "\n\n---\n\n"
         
@@ -959,28 +933,17 @@ class TimeSeriesAnalysisFlow():
         
         # 创建爬取代理
         crawler_agent = Agent(
-            role="Web Content Crawling Expert",
-            goal="Accurately extract key information related to specified questions from web content, save original content as MD files, and provide concise summaries",
-            backstory="""You are a professional web content intelligence specialist, skilled at extracting critical information from web pages with specific questions in mind.
-            Your job is to crawl content from specified URLs, summarize key points for each page, and extract essential information.
-            Important data from web pages must be recorded. You need to ensure the extracted content is accurate and complete, and provide summaries that precisely address the core issues.""",
+            role="网页内容爬取专家",
+            goal="准确的从网页内容中提取与指定问题相关的关键信息，将原始内容保存为MD文件，并提供切中要点的总结",
+            backstory="""你是一名专业的网页内容情报搜集专家，擅长带着问题从网页中提取关键重要信息。
+            你的工作是爬取指定URL的内容，将原始内容保存为Markdown文件，并对每个页面进行要点总结，提取关键信息。
+            重要的数据要记录下来，你需要确保提取的内容准确完整，并提供切中问题要害的总结。
+            你总是会严格按照要求将原始网页内容以Markdown格式保存到指定的文件路径，这是你工作流程中不可或缺的一步。""",
             verbose=True,
             allow_delegation=False,
             tools=crawl_tools,
             llm=gemini_llm
         )
-
-        # crawler_agent = Agent(
-        #     role="网页内容爬取专家",
-        #     goal="准确的从网页内容中提取与指定问题相关的关键信息，将原始内容保存为MD文件，并提供切中要点的总结",
-        #     backstory="""你是一名专业的网页内容情报搜集专家，擅长带着问题从网页中提取关键重要信息。
-        #     你的工作是爬取指定URL的内容，并对每个页面进行要点总结，提取关键信息。
-        #     网页中重要的数据要记录下来，你需要确保提取的内容准确完整，并提供切中问题要害的总结。""",
-        #     verbose=True,
-        #     allow_delegation=False,
-        #     tools=crawl_tools,
-        #     llm=gemini_llm
-        # )
         
         return crawler_agent
     
@@ -1037,32 +1000,20 @@ class TimeSeriesAnalysisFlow():
         
         # 创建总结代理
         conclusion_agent = Agent(
-            role="Comprehensive Analysis Expert",
-            goal="Synthesize multiple reports, extract core insights, and generate in-depth comprehensive analysis",
-            backstory="""You are a seasoned comprehensive analysis expert, skilled at examining issues from multiple perspectives and forming holistic views.
-            You can organically integrate information from different reports, identify commonalities and differences, and reveal underlying patterns.
-            You excel at grasping macro trends while paying attention to micro details, enabling readers to fully understand the logic behind market changes.
-            Your analysis has both historical depth and forward-looking vision, providing readers with comprehensive and valuable market insights.""",
+            role="汇总分析专家",
+            goal="综合多份报告，提炼核心洞察，生成全面深入的综合分析",
+            backstory="""你是一位资深的综合分析专家，擅长从多角度分析问题并形成整体观点。
+            你能够将不同报告中的信息有机整合，识别共性和差异，揭示深层规律。
+            你长于把握宏观大势，同时注重微观细节，能够让读者全面理解市场变化背后的逻辑。
+            你的分析既有历史纵深感，又有前瞻性，为读者提供全面且有价值的市场洞察。""",
             verbose=True,
             allow_delegation=False,
             llm=conclusion_llm
         )
-
-        # conclusion_agent = Agent(
-        #     role="汇总分析专家",
-        #     goal="综合多份报告，提炼核心洞察，生成全面深入的综合分析",
-        #     backstory="""你是一位资深的综合分析专家，擅长从多角度分析问题并形成整体观点。
-        #     你能够将不同报告中的信息有机整合，识别共性和差异，揭示深层规律。
-        #     你长于把握宏观大势，同时注重微观细节，能够让读者全面理解市场变化背后的逻辑。
-        #     你的分析既有历史纵深感，又有前瞻性，为读者提供全面且有价值的市场洞察。""",
-        #     verbose=True,
-        #     allow_delegation=False,
-        #     llm=conclusion_llm
-        # )
         
         return conclusion_agent
     
-    def _create_crawler_task(self, url: str, query: str, date: str, agent: Agent, query_type: str) -> Task:
+    def _create_crawler_task(self, url: str, query: str, date: str, agent: Agent) -> Task:
         """创建爬取任务"""
         # 生成唯一的文件名
         # 使用URL、查询关键词和日期的组合创建哈希，确保文件名唯一性
@@ -1071,47 +1022,60 @@ class TimeSeriesAnalysisFlow():
         date_str = date.replace('-', '') if date else "nodate"
         cache_filename = f"{url_hash}_{query_hash}_{date_str}.md"
         cache_path = os.path.join(self.state.output_dirs["cache_dir"], cache_filename)
-
+        
         return Task(
             description=f"""
-            [TASK_TYPE:crawler][QUERY_TYPE:{query_type}]
-
             Use the Firecrawl tool to scrape content from the following URL: {url}
             
             Please complete the following tasks:
             1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
             2. Analyze the content with the question "{query}" in mind, noting that the article was published on "{date}", please consider the historical context
-            3. Summarize key information related to the "{self.state.indicator_description}" financial indicator from the page content, including important events, significant data, and key viewpoints, especially focusing on content that reflects deep-level logic
-            4. Ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
+            3. Summarize key information related to the "{self.state.indicator_description}" financial indicator from the page content, including important events, significant data, and key viewpoints
+            4. Objectively extract from the page the deeper logic, reasons, factors, and objective events related to the indicator trends mentioned in the query
+            5. The output will be used to generate the final retrospective report, so please ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
             
             Note: You must save the original scraped webpage content in Markdown format to the specified file path. This is an important step to ensure the analysis process is traceable and reproducible.
+
             """,
             expected_output=f"""
-            A retrospective analysis report based on the page content about "{query}", focusing on analyzing factors affecting the {self.state.indicator_description} financial indicator.
-            The report should include the source URL at the end, formatted as:
-            # Source URL
-            [https://www.google.com](https://www.google.com)
+            A retrospective analysis report based on the page content about "{query}", focusing on analyzing factors affecting the {self.state.indicator_description} financial indicator. The report structure should include: important influencing factors, events, data, and the logic affecting the financial indicator, with the source URL noted at the end of the report.
             """,
             agent=agent,
             # 增加执行控制参数
             max_execution_time=30,  # 30秒超时
         )
-    
-    def _create_report_task(self, agent: Agent, crawl_tasks: List[Task], query: str, query_type: str = None) -> Task:
-        """创建报告生成任务，依赖于爬取任务"""
-        # 如果没有传入query_type，则从查询中提取
-        if query_type is None:
-            query_type = "unknown"
-            if "trend_query" in query.lower():
-                query_type = "trend_query"
-            elif "high_price_query" in query.lower():
-                query_type = "high_price_query"
-            elif "low_price_query" in query.lower():
-                query_type = "low_price_query"
+
+        # return Task(
+        #     description=f"""
+        #     使用Firecrawl工具爬取以下URL的内容：{url}
             
+        #     请完成以下工作：
+        #     1. 使用FirecrawlScrapeMdCleanTool工具爬取页面内容
+        #     2. 带着问题"{query}"进行分析，注意该文章发布于"{date}"，请考虑文章的时间背景。
+        #     3. 汇总爬取内容中与指标"{self.state.indicator_description}"相关的关键信息，包括影响指标走势的重要事件、数据、作者观点，特别是反应了深层次逻辑的内容要重点注意。
+        #     4.请确保内容准确、全面。不要带有自己的观点、不要编造事实。
+            
+        #     注意：必须将原始爬取的网页内容以Markdown格式保存到指定的文件路径中。这是确保分析过程可追溯和可复现的重要步骤。
+
+        #     """,
+        #     expected_output=f"""
+        #     一份基于页面内容的、关于"{query}"的复盘分析报告，重点分析影响{self.state.indicator_description}金融指标相关的因素。
+        #     报告最后注明来源的url，格式示例：
+        #     # 来源url
+        #     [https://www.google.com](https://www.google.com)
+        #     """,
+        #     agent=agent,
+        #     # 增加执行控制参数
+        #     max_execution_time=30,  # 30秒超时
+        # )
+    
+    
+    def _create_report_task(self, agent: Agent, crawl_tasks: List[Task], query: str) -> Task:
+        """创建报告生成任务，依赖于爬取任务"""
+        # from crewai import Task
+        
         return Task(
             description=f"""
-            [TASK_TYPE:report][QUERY_TYPE:{query_type}]
             Based on the analysis of multiple previously crawled web pages, generate a comprehensive summary report for {query}.
             
             Please complete the following tasks:
@@ -1123,14 +1087,32 @@ class TimeSeriesAnalysisFlow():
             Please ensure the report content is accurate, comprehensive, and provides valuable insights.
             """,
             expected_output=f"""
-            A markdown-formatted report. A structurally complete causal analysis report about {query.split("after:")[0].strip()}. The report should be written in English.
+            A structurally complete causal analysis report about {query.split("after:")[0].strip()}. The report should be written in Chinese.
             """,
             agent=agent,
             context=crawl_tasks  # 使用爬取任务作为上下文
         )
     
+        # return Task(
+        #     description=f"""
+        #     基于之前爬取的多篇网页内容分析，生成一份针对{query}的全面的汇总报告。
+            
+        #     请完成以下工作：
+        #     1. 你的上下文是之前多个links所爬取的网页的客观内容、主观观点
+        #     2. 带着"{query}"进行对上下文的理解和分析，总结、汇总多方面的客观和主观信息
+        #     3. 信息中如果有矛盾的地方，要进行辩证的分析，则假设你自己是query涉及的领域的绝对权威专家，根据你自己的知识理解给出合理的解释。
+        #     4. 每个观点后面要附上url来源，务必要求准确。不一定是一个观点、一个数据一个段落，你可以旁征博引，在围绕某一个观点引用多个来源的证据、数据或者专家的观点。
+            
+        #     请确保报告内容准确、全面，并提供有价值的见解。
+        #     """,
+        #     expected_output=f"""
+        #     一份结构完整的关于{query.split("after:")[0].strip()}的原因分析报告。报告使用中文撰写。
+        #     """,
+        #     agent=agent,
+        #     context=crawl_tasks  # 使用爬取任务作为上下文
+        # )
     
-    def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
+   def _create_conclusion_task(self, agent: Agent, report_tasks: List[Task], 
                            period_index: int, start_date: str, end_date: str) -> Task:
         """创建时间段总结任务，依赖于报告任务"""
         from crewai import Task
@@ -1190,149 +1172,55 @@ class TimeSeriesAnalysisFlow():
         logger.info(f"生成时间段 {period_index} 的综合报告...")
         
         # 初始化报告目录
-        reports_dir = self.state.output_dirs["final_report_dir"]
-        caches_dir = self.state.output_dirs["cache_dir"]
+        reports_dir = os.path.join(self.state.output_dirs["final_report_dir"], "reports")
         os.makedirs(reports_dir, exist_ok=True)
-        os.makedirs(caches_dir, exist_ok=True)
         
         # 分类任务
         crawler_tasks = []
         report_tasks = []
         conclusion_tasks = []
         
-        # 打印所有任务的描述，用于调试
-        for i, task in enumerate(tasks):
-            task_desc = task.description[:100] + "..." if len(task.description) > 100 else task.description
-            logger.info(f"任务 {i}: {task_desc}")
-            
-            # 使用任务描述中的标记来识别任务类型
-            if "[TASK_TYPE:crawler]" in task.description:
+        for task in tasks:
+            if "爬取URL的内容" in task.description:
+                # 只处理成功的爬取任务
                 if hasattr(task, 'output') and task.output:
                     crawler_tasks.append(task)
-                    logger.info(f"识别为爬取任务: {task_desc}")
-            elif "[TASK_TYPE:report]" in task.description:
+            elif "生成查询报告" in task.description:
                 report_tasks.append(task)
-                logger.info(f"识别为报告任务: {task_desc}")
-            elif "[TASK_TYPE:conclusion]" in task.description:
+            elif "撰写一份区间内全面的复盘总结报告" in task.description:
                 conclusion_tasks.append(task)
-                logger.info(f"识别为总结任务: {task_desc}")
-            else:
-                logger.info(f"未能识别任务类型: {task_desc}")
         
-        logger.info(f"找到 {len(crawler_tasks)} 个爬取任务, {len(report_tasks)} 个报告任务, {len(conclusion_tasks)} 个复盘总结任务")
-        
-        # 按查询类型组织爬取任务
-        query_type_crawler_tasks = {}
+        logger.info(f"找到 {len(crawler_tasks)} 个爬取任务, {len(report_tasks)} 个报告任务, {len(conclusion_tasks)} 个总结任务")
         
         # 保存爬取任务结果
         for i, task in enumerate(crawler_tasks):
             try:
-                # 提取查询类型 - 优先使用[QUERY_TYPE:xxx]标记
-                query_type = "unknown"
-                if "[QUERY_TYPE:" in task.description:
-                    query_type_start = task.description.find("[QUERY_TYPE:") + len("[QUERY_TYPE:")
-                    query_type_end = task.description.find("]", query_type_start)
-                    if query_type_end > query_type_start:
-                        query_type = task.description[query_type_start:query_type_end].strip()
-                
-                # 确保query_type不是unknown
-                if query_type == "unknown":
-                    logger.warning(f"爬取任务 {i} 的查询类型无法识别，将尝试从描述中提取")
-                    if "trend_query" in task.description.lower():
-                        query_type = "trend_query"
-                    elif "high_price_query" in task.description.lower():
-                        query_type = "high_price_query"
-                    elif "low_price_query" in task.description.lower():
-                        query_type = "low_price_query"
-                    else:
-                        # 如果仍然无法识别，尝试最后的方法
-                        for qt in ["trend_query", "high_price_query", "low_price_query"]:
-                            if qt in str(task.output).lower():
-                                query_type = qt
-                                break
-                
                 # 提取URL
-                url = None
-                # 尝试不同的URL提取方法
-                if "爬取URL的内容：" in task.description:
-                    url = task.description.split("爬取URL的内容：")[1].split("\n")[0].strip()
-                elif "URL:" in task.description:
-                    url = task.description.split("URL:")[1].split("\n")[0].strip()
-                elif "from the following URL:" in task.description:
-                    url = task.description.split("from the following URL:")[1].split("\n")[0].strip()
-                
-                # 如果无法提取URL，使用索引号代替
-                if not url:
-                    url = f"unknown_url_{i}"
-                
-                # 使用URL哈希作为文件名的一部分
+                url = task.description.split("URL的内容：")[1].split("\n")[0].strip()
                 url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
                 
-                # 将爬取任务添加到对应查询类型的列表中
-                if query_type not in query_type_crawler_tasks:
-                    query_type_crawler_tasks[query_type] = []
-                query_type_crawler_tasks[query_type].append((task, url, url_hash))
-                
-                # 保存爬取结果到文件，确保文件名中包含正确的query_type
-                crawler_report_path = os.path.join(caches_dir, f"period_{period_index}_{query_type}_crawler_{url_hash}.md")
+                # 保存爬取结果
+                crawler_report_path = os.path.join(reports_dir, f"period_{period_index}_crawler_{i}_{url_hash}.md")
                 with open(crawler_report_path, 'w', encoding='utf-8') as f:
                     f.write(f"# 爬取结果: {url}\n\n")
                     f.write(str(task.output))
                 
-                logger.info(f"爬取任务结果已保存至: {crawler_report_path}, 查询类型: {query_type}")
+                logger.info(f"爬取任务 {i} 结果已保存至: {crawler_report_path}")
             except Exception as e:
-                logger.error(f"保存爬取任务结果时出错: {str(e)}")
-                logger.error(traceback.format_exc())
-        
-        # 创建查询类型汇总报告
-        for query_type, tasks_info in query_type_crawler_tasks.items():
-            try:
-                # 如果查询类型下有多个爬取任务，创建一个汇总报告
-                if len(tasks_info) > 1:
-                    conclusion_path = os.path.join(reports_dir, f"period_{period_index}_{query_type}_crawler_combined.md")
-                    with open(conclusion_path, 'w', encoding='utf-8') as f:
-                        f.write(f"# {query_type} 爬取结果汇总\n\n")
-                        for task_info in tasks_info:
-                            task, url, url_hash = task_info
-                            f.write(f"## 来源: {url}\n\n")
-                            f.write(str(task.output))
-                            f.write("\n\n---\n\n")
-                    logger.info(f"{query_type} 爬取结果汇总已保存至: {conclusion_path}")
-            except Exception as e:
-                logger.error(f"创建{query_type}爬取结果汇总时出错: {str(e)}")
-                logger.error(traceback.format_exc())
+                logger.error(f"保存爬取任务 {i} 结果时出错: {str(e)}")
         
         # 保存查询报告结果
         query_reports = {}
         for i, task in enumerate(report_tasks):
             try:
-                # 提取查询类型 - 优先使用[QUERY_TYPE:xxx]标记
+                # 提取查询类型
                 query_type = "unknown"
-                if "[QUERY_TYPE:" in task.description:
-                    query_type_start = task.description.find("[QUERY_TYPE:") + len("[QUERY_TYPE:")
-                    query_type_end = task.description.find("]", query_type_start)
-                    if query_type_end > query_type_start:
-                        query_type = task.description[query_type_start:query_type_end].strip()
-                
-                # 如果无法从标记中提取，尝试从任务描述中提取
-                if query_type == "unknown":
-                    logger.warning(f"报告任务 {i} 的查询类型无法从标记中识别，将尝试从描述中提取")
-                    if "trend_query" in task.description.lower():
-                        query_type = "trend_query"
-                    elif "high_price_query" in task.description.lower():
-                        query_type = "high_price_query"
-                    elif "low_price_query" in task.description.lower():
-                        query_type = "low_price_query"
-                    else:
-                        # 如果仍然无法识别，尝试从输出中提取
-                        for qt in ["trend_query", "high_price_query", "low_price_query"]:
-                            if qt in str(task.output).lower():
-                                query_type = qt
-                                break
-                
-                # 如果仍无法确定查询类型，使用索引号
-                if query_type == "unknown":
-                    query_type = f"query_type_{i}"
+                if "trend_query" in task.description.lower():
+                    query_type = "trend_query"
+                elif "high_price_query" in task.description.lower():
+                    query_type = "high_price_query"
+                elif "low_price_query" in task.description.lower():
+                    query_type = "low_price_query"
                 
                 # 保存查询报告
                 query_report_path = os.path.join(reports_dir, f"period_{period_index}_{query_type}_report.md")
@@ -1345,8 +1233,7 @@ class TimeSeriesAnalysisFlow():
                 
                 logger.info(f"查询报告 {query_type} 已保存至: {query_report_path}")
             except Exception as e:
-                logger.error(f"保存查询报告结果时出错: {str(e)}")
-                logger.error(traceback.format_exc())
+                logger.error(f"保存查询报告 {i} 结果时出错: {str(e)}")
         
         # 获取总结报告
         period_conclusion = ""
@@ -1363,46 +1250,32 @@ class TimeSeriesAnalysisFlow():
                 logger.info(f"总结报告已保存至: {conclusion_report_path}")
             except Exception as e:
                 logger.error(f"保存总结报告时出错: {str(e)}")
-                logger.error(traceback.format_exc())
         
-        # 生成综合报告 - 只在有查询报告或总结报告时创建
-        if query_reports or period_conclusion:
-            combined_report = f"# 时间段 {period_index} 综合报告\n\n"
-            
-            # 添加各查询报告 - 只在有查询报告时添加
-            if query_reports:
-                combined_report += "## 查询报告\n\n"
-                for query_type, report in query_reports.items():
-                    # 使用完整的报告内容
-                    combined_report += f"### {query_type}\n\n{report}\n\n---\n\n"
-            
-            # 添加总结报告 - 只在有总结报告时添加
-            if period_conclusion:
-                combined_report += "## 综合分析\n\n"
-                combined_report += period_conclusion
-            else:
-                combined_report += "## 综合分析\n\n未能生成综合分析。"
-            
-            # 保存综合报告 - 现在直接作为period_report返回
-            period_report_path = os.path.join(reports_dir, f"period_{period_index}_report.md")
-            with open(period_report_path, 'w', encoding='utf-8') as f:
-                f.write(combined_report)
-            
-            logger.info(f"时间段报告已保存至: {period_report_path}")
-            
-            return combined_report
+        # 生成汇总报告
+        combined_report = f"# 时间段 {period_index} 综合报告\n\n"
+        
+        # 添加各查询报告摘要
+        combined_report += "## 查询报告摘要\n\n"
+        for query_type, report in query_reports.items():
+            # 提取报告的前300个字符作为摘要
+            summary = report[:300] + "..." if len(report) > 300 else report
+            combined_report += f"### {query_type}\n\n{summary}\n\n"
+        
+        # 添加总结报告
+        if period_conclusion:
+            combined_report += "## 综合分析\n\n"
+            combined_report += period_conclusion
         else:
-            # 如果没有任何报告，返回一个默认报告
-            default_report = f"# 时间段 {period_index} 报告\n\n未能生成任何报告内容。"
-            
-            # 保存默认报告
-            default_report_path = os.path.join(reports_dir, f"period_{period_index}_report.md")
-            with open(default_report_path, 'w', encoding='utf-8') as f:
-                f.write(default_report)
-            
-            logger.info(f"默认时间段报告已保存至: {default_report_path}")
-            
-            return default_report
+            combined_report += "## 综合分析\n\n未能生成综合分析。"
+        
+        # 保存汇总报告
+        combined_report_path = os.path.join(reports_dir, f"period_{period_index}_combined_report.md")
+        with open(combined_report_path, 'w', encoding='utf-8') as f:
+            f.write(combined_report)
+        
+        logger.info(f"汇总报告已保存至: {combined_report_path}")
+        
+        return combined_report
 
 class TimePeriodAnalysisFlow(Flow):
     """时间段分析子流程"""
@@ -1428,7 +1301,7 @@ class TimePeriodAnalysisFlow(Flow):
     @start()
     def generate_search_query(self):
         """生成搜索查询"""
-        logger.info(f"为时间段 {self.period_index} 生成搜索查询...")
+        logger.info(f"为时间段 {self.period_index+1} 生成搜索查询...")
         
         # 获取时间段数据
         period_data = self.period_data
@@ -1460,7 +1333,7 @@ class TimePeriodAnalysisFlow(Flow):
         # 计算低价日期前后7天的时间范围
         low_before_date = self._date_offset(low_price_date, -7)
         low_after_date = self._date_offset(low_price_date, 7)
-        low_price_query = f"{indicator} bottom out after:{low_before_date} before:{low_after_date}"
+        low_price_query = f"{indicator} dropped after:{low_before_date} before:{low_after_date}"
         
         # 组合三种查询
         queries = {
