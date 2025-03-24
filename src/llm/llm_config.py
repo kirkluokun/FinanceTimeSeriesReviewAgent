@@ -39,6 +39,17 @@ class LLMConfig:
                 "model": "deepseek/deepseek-chat",
                 "api_key": os.environ.get("DEEPSEEK_API_KEY"),
             },
+            "gemini-2.0-pro": {
+                "provider": "gemini",
+                "model": "gemini/gemini-2.0-pro-exp-02-05",
+                "api_key": os.environ.get("GEMINI_API_KEY"),
+            },
+            "deepseek-v3-ARK": {
+                "provider": "deepseek-v3-ARK",
+                "model": "openai/deepseek-v3-241226",
+                "api_key": os.environ.get("ARK_API_KEY"),
+                "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+            }
         }
         
         # 备用模型映射

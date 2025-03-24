@@ -1023,14 +1023,15 @@ class TimeSeriesAnalysisFlow():
         """创建总结代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("deepseek")
+        model_config = llm_config.get_model("deepseek-v3-ARK")
         
         # 创建LLM配置
         conclusion_llm = LLM(
             provider=model_config["provider"],
             model=model_config["model"],
             temperature=0.7,
-            api_key=model_config["api_key"]
+            api_key=model_config["api_key"],
+            base_url=model_config["base_url"]
         )
         
         # 创建总结代理
