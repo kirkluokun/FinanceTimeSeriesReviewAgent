@@ -485,12 +485,10 @@ class TimeSeriesAnalysisFlow():
             if self.on_report_generation_start:
                 self.on_report_generation_start()
             
-            final_report = self.generate_final_report(analysis_result)
-            
             if self.on_report_generation_complete:
-                self.on_report_generation_complete(final_report.get("final_report_path", ""))
+                self.on_report_generation_complete(analysis_result.get("final_report_path", ""))
             
-            return final_report
+            return analysis_result
             
         except Exception as e:
             if self.on_error:
@@ -1166,15 +1164,6 @@ class TimeSeriesAnalysisFlow():
         
         return conclusion_task
 
-
-    def generate_final_report(self, crawl_result: Dict[str, Any]):
-        """生成最终报告(此方法由crawl_web_content内部逻辑替代)"""
-        logger.info("最终报告已由crawl_web_content生成")
-        
-        return {
-            "status": "completed",
-            "final_report_path": crawl_result.get("final_report_path", "")
-        }
 
     def _generate_period_report(self, tasks: List[Task], period_index: int) -> str:
         """
