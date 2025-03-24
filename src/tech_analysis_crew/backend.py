@@ -268,7 +268,7 @@ class RunTechAnalysisBackend:
                 "job_id": job_id,
                 "indicator": indicator,
                 "input_file": input_file,
-                "output_file": result.get("final_report_path", ""),
+                "output_file": result.get("crawl_result", {}).get("final_report_path", ""),
                 "summary_file": result.get("summary_path", ""),
                 "progress": self.progress,
                 "duration": duration

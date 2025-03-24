@@ -93,7 +93,10 @@ def display_result(result: Dict[str, Any]):
         console.print(f"\n作业ID: [cyan]{result['job_id']}[/cyan]")
         console.print(f"分析指标: [cyan]{result['indicator']}[/cyan]")
         console.print(f"输入文件: [cyan]{result['input_file']}[/cyan]")
+
+        # 如果有多个输出文件，显示所有文件
         console.print(f"输出文件: [cyan]{result['output_file']}[/cyan]")
+
         console.print(f"摘要文件: [cyan]{result['summary_file']}[/cyan]")
         console.print(f"总耗时: [cyan]{result['duration']:.2f}秒[/cyan]")
     else:
