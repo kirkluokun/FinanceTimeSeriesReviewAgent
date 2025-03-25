@@ -87,7 +87,7 @@ class CrewConfig:
         """创建总结代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("deepseek-v3-ARK")
+        model_config = llm_config.get_model("deepseek-v3-togetherai")
         
         # 创建LLM配置
         conclusion_llm = LLM(
@@ -95,7 +95,6 @@ class CrewConfig:
             model=model_config["model"],
             temperature=0.7,
             api_key=model_config["api_key"],
-            base_url=model_config["base_url"]
         )
         
         # 创建总结代理
@@ -116,6 +115,24 @@ class CrewConfig:
     @staticmethod
     def create_crawler_task(url: str, query: str, date: str, agent: Agent, query_type: str, indicator_description: str, cache_dir: str, market_data_context: str = "") -> Task:
         """创建爬取任务"""
+        # 检查URL是否为PDF文件
+        if url.lower().endswith('.pdf'):
+            # 如果是PDF，返回一个说明任务而不是爬取任务
+            return Task(
+                description=f"""
+                [TASK_TYPE:crawler][QUERY_TYPE:{query_type}]
+                
+                URL: {url}
+                
+                该URL指向PDF文件，根据系统规则，我们不处理PDF文件。
+                """,
+                expected_output=f"""
+                无法处理PDF文件: {url}
+                请提供其他非PDF格式的URL进行分析。
+                """,
+                agent=agent
+            )
+            
         # 生成唯一的文件名
         # 使用URL、查询关键词和日期的组合创建哈希，确保文件名唯一性
         url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
@@ -130,6 +147,8 @@ class CrewConfig:
 
             Use the Firecrawl tool to scrape content from the following URL: {url}
             
+            如果url是pdf文件，则直接返回说明无法爬取的Task。
+
             Please complete the following tasks:
             1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
             2. Analyze the content with the question "{query}" in mind, noting that the article was published on "{date}", please consider the historical context

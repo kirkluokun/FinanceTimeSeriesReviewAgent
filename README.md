@@ -1,6 +1,6 @@
 
 python src/tech_analysis_crew/run_backend.py --input src/tech_analysis_crew/input/cu.csv --query "帮我复盘comex铜价"
-
+python src/tech_analysis_crew/run_backend.py --input src/tech_analysis_crew/input/rmb.csv --query "帮我复盘离岸美元兑人民币汇率走势"
 
 
 # 时间序列分析与趋势挖掘系统

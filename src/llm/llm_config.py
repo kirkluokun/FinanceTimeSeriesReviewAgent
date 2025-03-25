@@ -29,9 +29,9 @@ class LLMConfig:
                 "model": "gemini/gemini-2.0-flash",
                 "api_key": os.environ.get("GEMINI_API_KEY"),
             },
-            "gpt4o-mini": {
+            "gpt4o": {
                 "provider": "openai",
-                "model": "gpt-4o-mini",
+                "model": "gpt-4o",
                 "api_key": os.environ.get("OPENAI_API_KEY"),
             },
             "deepseek": {
@@ -49,6 +49,14 @@ class LLMConfig:
                 "model": "openai/deepseek-v3-241226",
                 "api_key": os.environ.get("ARK_API_KEY"),
                 "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+            },
+            "deepseek-v3-togetherai": {
+                "provider": "deepseek-v3-togetherai",
+                "model": "together_ai/deepseek-ai/DeepSeek-V3",
+                "api_key": os.environ.get("TOGETHER_API_KEY"),
+                "base_url": "https://api.together.xyz/v1",
+                "temperature": 0.7,
+                "max_tokens": 1000
             }
         }
         
