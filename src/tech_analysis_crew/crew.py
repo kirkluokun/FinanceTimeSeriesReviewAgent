@@ -24,6 +24,7 @@ import time
 import concurrent.futures
 import threading
 import traceback
+import re
 # 导入CrewConfig
 from src.tech_analysis_crew.config.crew_config import CrewConfig
 
@@ -198,7 +199,7 @@ class TimeSeriesAnalysisCrew:
         retry_count = 0
         
         # 当前使用的模型
-        current_model = "gemini"
+        current_model = "gemini-2.0-flash"
         use_backup = False
         
         # 记录错误信息
@@ -754,7 +755,10 @@ class TimeSeriesAnalysisFlow():
         }
     
     def _process_period_parallel(self, period: Dict[str, Any], period_index: int) -> Dict[str, Any]:
-        """并行处理单个时间段的所有查询和链接"""
+        """并行处理单个时间段的所有查询和链接
+        
+        改进版：每种查询类型爬取完成后立即生成报告，而不是等待所有类型爬取完成再统一处理
+        """
         logger.info(f"并行处理时间段 {period_index} 的查询...")
         
         # 确保cache目录存在
@@ -783,59 +787,61 @@ class TimeSeriesAnalysisFlow():
         report_agent = self._create_report_agent()
         conclusion_agent = self._create_conclusion_agent()
         
-        # 存储所有查询类型的爬取结果
+        # 存储所有查询类型的爬取结果和报告任务
         query_results = {}
-        
-        # 处理三种查询类型
-        query_types = ["trend_query", "high_price_query", "low_price_query"]
-        
-        for query_type in query_types:
-            if query_type in period["search_results"]:
-                logger.info(f"处理查询类型: {query_type}")
-                
-                # 获取查询及其链接
-                query_data = period["search_results"][query_type]
-                query = period["queries"].get(query_type, "")
-                
-                if not query or not query_data or "links" not in query_data or not query_data["links"]:
-                    logger.info(f"没有找到有效的 {query_type} 查询或链接，跳过")
-                    continue
-                
-                # 并行爬取该查询类型的所有链接
-                crawl_results = self._parallel_crawl_links(
-                    query_type,
-                    query,
-                    query_data["links"],
-                    crawler_agent,
-                    period_index,
-                    cache_dir,
-                    market_data  # 传递真实市场数据
-                )
-                
-                # 存储爬取结果
-                query_results[query_type] = {
-                    "query": query,
-                    "crawl_results": crawl_results,
-                    "links": query_data["links"]
-                }
-                
-                logger.info(f"查询类型 {query_type} 的 {len(crawl_results)} 个链接爬取完成")
-        
-        # 生成各查询类型的报告
         report_tasks = {}
-        for query_type, data in query_results.items():
-            logger.info(f"为查询类型 {query_type} 生成报告...")
+        all_crawled_contents = {}
+        
+        # 使用线程池并行处理每种查询类型
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as query_executor:
+            # 创建查询类型处理任务
+            future_to_query_type = {}
             
-            # 创建报告任务
-            report_task = self._create_report_from_crawl_results(
-                report_agent,
-                data["crawl_results"],
-                data["query"],
-                query_type
-            )
+            # 处理三种查询类型
+            query_types = ["trend_query", "high_price_query", "low_price_query"]
             
-            # 存储报告任务
-            report_tasks[query_type] = report_task
+            for query_type in query_types:
+                if query_type in period["search_results"]:
+                    # 获取查询及其链接
+                    query_data = period["search_results"][query_type]
+                    query = period["queries"].get(query_type, "")
+                    
+                    if not query or not query_data or "links" not in query_data or not query_data["links"]:
+                        logger.info(f"没有找到有效的 {query_type} 查询或链接，跳过")
+                        continue
+                    
+                    # 提交查询类型处理任务
+                    future = query_executor.submit(
+                        self._process_query_type,
+                        query_type=query_type,
+                        query=query,
+                        links=query_data["links"],
+                        crawler_agent=crawler_agent,
+                        report_agent=report_agent,
+                        period_index=period_index,
+                        cache_dir=cache_dir,
+                        market_data=market_data
+                    )
+                    future_to_query_type[future] = query_type
+            
+            # 收集每种查询类型的处理结果
+            for future in concurrent.futures.as_completed(future_to_query_type):
+                query_type = future_to_query_type[future]
+                try:
+                    # 获取处理结果
+                    result = future.result()
+                    query_results[query_type] = result["query_result"]
+                    report_tasks[query_type] = result["report_task"]
+                    
+                    # 合并爬取内容
+                    for url, content in result["crawled_contents"].items():
+                        if content and url:
+                            all_crawled_contents[url] = content
+                    
+                    logger.info(f"查询类型 {query_type} 处理完成，生成了报告任务")
+                except Exception as e:
+                    logger.error(f"处理查询类型 {query_type} 时出错: {str(e)}")
+                    logger.error(traceback.format_exc())
         
         # 如果没有报告任务，返回空结果
         if not report_tasks:
@@ -864,27 +870,18 @@ class TimeSeriesAnalysisFlow():
             period_end_date
         )
         
-        # 创建包含所有报告任务和总结任务的Crew
-        all_agents = [report_agent, conclusion_agent]
-        all_tasks = list(report_tasks.values()) + [conclusion_task]
-        
-        report_crew = Crew(
-            agents=all_agents,
-            tasks=all_tasks,
+        # 创建包含总结任务的Crew
+        conclusion_crew = Crew(
+            agents=[conclusion_agent],
+            tasks=[conclusion_task],
             verbose=True
         )
         
-        # 执行报告和总结任务
-        report_crew.kickoff()
+        # 执行总结任务
+        conclusion_crew.kickoff()
         
-        # 收集所有爬取内容
-        all_crawled_contents = {}
-        for results in query_results.values():
-            for url, content in results["crawl_results"].items():
-                if content and url:
-                    all_crawled_contents[url] = content
-        
-        # 生成时间段报告
+        # 收集所有完成的任务
+        all_tasks = list(report_tasks.values()) + [conclusion_task]
         successful_tasks = [task for task in all_tasks if hasattr(task, 'output') and task.output]
         
         # 生成综合报告
@@ -910,9 +907,93 @@ class TimeSeriesAnalysisFlow():
             "crawled_contents": all_crawled_contents
         }
     
+    def _process_query_type(self, query_type: str, query: str, links: List[Dict[str, Any]],
+                           crawler_agent: Agent, report_agent: Agent, period_index: int, 
+                           cache_dir: str, market_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """处理单个查询类型的完整流程：爬取链接并生成报告
+        
+        Args:
+            query_type: 查询类型
+            query: 查询内容
+            links: 链接列表
+            crawler_agent: 爬虫代理
+            report_agent: 报告生成代理
+            period_index: 时间段索引
+            cache_dir: 缓存目录
+            market_data: 时间段的市场数据
+            
+        Returns:
+            包含爬取结果和报告任务的字典
+        """
+        logger.info(f"处理查询类型 {query_type}, 链接数: {len(links)}")
+        
+        # 1. 并行爬取该查询类型的所有链接
+        crawl_results = self._parallel_crawl_links(
+            query_type,
+            query,
+            links,
+            crawler_agent,
+            period_index,
+            cache_dir,
+            market_data
+        )
+        
+        logger.info(f"查询类型 {query_type} 爬取完成，共 {len(crawl_results)} 个结果，开始生成报告")
+        
+        # 2. 创建报告任务
+        report_task = self._create_report_from_crawl_results(
+            report_agent,
+            crawl_results,
+            query,
+            query_type
+        )
+        
+        # 3. 执行报告任务
+        report_crew = Crew(
+            agents=[report_agent],
+            tasks=[report_task],
+            verbose=True
+        )
+        
+        # 执行报告生成
+        logger.info(f"开始生成查询类型 {query_type} 的报告")
+        report_crew.kickoff()
+        
+        # 查看报告任务是否成功
+        if hasattr(report_task, 'output') and report_task.output:
+            logger.info(f"查询类型 {query_type} 的报告生成成功")
+            
+            # 保存报告到文件
+            report_dir = os.path.join(self.state.output_dirs["final_report_dir"])
+            os.makedirs(report_dir, exist_ok=True)
+            report_path = os.path.join(report_dir, f"period_{period_index}_{query_type}_report.md")
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(f"# {query_type} 查询报告\n\n")
+                f.write(str(report_task.output))
+                
+            logger.info(f"查询类型 {query_type} 的报告已保存至: {report_path}")
+        else:
+            logger.error(f"查询类型 {query_type} 的报告生成失败")
+        
+        # 4. 返回查询结果和报告任务
+        query_result = {
+            "query": query,
+            "crawl_results": crawl_results,
+            "links": links
+        }
+        
+        return {
+            "query_result": query_result,
+            "report_task": report_task,
+            "crawled_contents": crawl_results
+        }
+
     def _parallel_crawl_links(self, query_type: str, query: str, links: List[Dict[str, Any]], 
                               crawler_agent: Agent, period_index: int, cache_dir: str, period_data: Dict[str, Any] = None) -> Dict[str, str]:
         """并行爬取多个链接
+        
+        改进版：增加批处理机制和缓存检查，提高并行效率
         
         Args:
             query_type: 查询类型
@@ -934,6 +1015,10 @@ class TimeSeriesAnalysisFlow():
         # 创建一个线程安全的锁
         lock = threading.Lock()
         
+        # 检查URL缓存
+        url_cache = {}
+        cache_hits = 0
+        
         # 创建爬取任务列表
         crawl_tasks = []
         
@@ -942,63 +1027,129 @@ class TimeSeriesAnalysisFlow():
             url = link.get("link", "")
             if not url:
                 continue
+            
+            # 生成缓存文件名
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+            cache_path = os.path.join(
+                cache_dir, 
+                f"period_{period_index}_{query_type}_crawler_{url_hash}.md"
+            )
+            
+            # 检查缓存是否存在
+            if os.path.exists(cache_path):
+                try:
+                    with open(cache_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        # 跳过标题行，获取实际内容
+                        if content and "# 爬取结果:" in content:
+                            content = content.split("\n\n", 1)[1] if "\n\n" in content else content
+                            crawl_results[url] = content
+                            cache_hits += 1
+                            logger.info(f"从缓存加载链接 {url} 的内容")
+                            continue
+                except Exception as e:
+                    logger.error(f"从缓存加载 {url} 失败: {str(e)}")
                 
+            # 如果缓存不存在或无效，添加到爬取任务
             date = link.get("date", "")
             task = self._create_crawler_task(url, query, date, crawler_agent, query_type, period_data)
             crawl_tasks.append((task, url))
         
+        if cache_hits > 0:
+            logger.info(f"从缓存加载了 {cache_hits} 个链接内容，剩余 {len(crawl_tasks)} 个链接需要爬取")
+        
+        # 如果没有需要爬取的任务，直接返回缓存结果
+        if not crawl_tasks:
+            logger.info(f"所有链接已从缓存加载，无需爬取")
+            return crawl_results
+        
+        # 创建批处理任务
+        batch_size = 2  # 每批处理2个URL
+        batched_tasks = [crawl_tasks[i:i+batch_size] for i in range(0, len(crawl_tasks), batch_size)]
+        logger.info(f"将 {len(crawl_tasks)} 个爬取任务分成 {len(batched_tasks)} 个批次处理")
+        
         # 创建一个线程池
-        max_workers = min(len(crawl_tasks), 5)  # 限制最大并行数
+        max_workers = min(3, len(batched_tasks))  # 限制最大并行数为3
         
-        def execute_task(task_data):
-            task, url = task_data
-            try:
-                # 创建一个单任务的Crew
-                task_crew = Crew(
-                    agents=[crawler_agent],
-                    tasks=[task],
-                    verbose=True
-                )
+        def execute_batch(batch):
+            batch_results = {}
+            for task, url in batch:
+                try:
+                    # 创建一个单任务的Crew
+                    task_crew = Crew(
+                        agents=[crawler_agent],
+                        tasks=[task],
+                        verbose=True
+                    )
+                    
+                    # 执行爬取任务，添加超时控制
+                    start_time = time.time()
+                    max_time = 180  # 3分钟超时
+                    result = None
+                    
+                    try:
+                        # 执行爬取任务
+                        result = task_crew.kickoff()
+                        
+                        # 检查执行时间
+                        elapsed_time = time.time() - start_time
+                        if elapsed_time > max_time:
+                            logger.warning(f"链接 {url} 爬取时间过长: {elapsed_time:.2f}秒")
+                    except Exception as timeout_e:
+                        logger.error(f"链接 {url} 爬取超时或出错: {str(timeout_e)}")
+                    
+                    # 如果任务执行成功
+                    if result and hasattr(task, 'output') and task.output:
+                        content = str(task.output)
+                        
+                        # 生成缓存文件名
+                        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+                        crawler_report_path = os.path.join(
+                            cache_dir, 
+                            f"period_{period_index}_{query_type}_crawler_{url_hash}.md"
+                        )
+                        
+                        # 将结果保存到文件
+                        with open(crawler_report_path, 'w', encoding='utf-8') as f:
+                            f.write(f"# 爬取结果: {url}\n\n")
+                            f.write(content)
+                        
+                        logger.info(f"链接 {url} 爬取完成，结果已保存至: {crawler_report_path}")
+                        
+                        # 添加到批处理结果
+                        batch_results[url] = content
+                    else:
+                        logger.error(f"链接 {url} 爬取失败，无有效输出")
+                except Exception as e:
+                    logger.error(f"爬取链接 {url} 时出错: {str(e)}")
+                    logger.error(traceback.format_exc())
                 
-                # 执行爬取任务
-                result = task_crew.kickoff()
-                
-                # 将结果保存到文件
-                url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-                crawler_report_path = os.path.join(
-                    cache_dir, 
-                    f"period_{period_index}_{query_type}_crawler_{url_hash}.md"
-                )
-                
-                with open(crawler_report_path, 'w', encoding='utf-8') as f:
-                    f.write(f"# 爬取结果: {url}\n\n")
-                    f.write(str(task.output))
-                
-                logger.info(f"链接 {url} 爬取完成，结果已保存至: {crawler_report_path}")
-                
-                # 将结果添加到结果集
-                with lock:
-                    crawl_results[url] = str(task.output)
-                
-                return url, result
-            except Exception as e:
-                logger.error(f"爬取链接 {url} 时出错: {str(e)}")
-                logger.error(traceback.format_exc())
-                return url, None
-        
-        # 使用线程池并行执行爬取任务
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(execute_task, task_data) for task_data in crawl_tasks]
+                # 添加短暂的间隔，避免API限制
+                time.sleep(1)
             
-            # 等待所有任务完成
+            return batch_results
+        
+        # 使用线程池执行批处理任务
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
+            for batch in batched_tasks:
+                # 提交批处理任务
+                future = executor.submit(execute_batch, batch)
+                futures.append(future)
+            
+            # 等待所有批处理任务完成
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    url, result = future.result()
-                    logger.info(f"链接 {url} 的爬取任务已完成")
+                    # 获取批处理结果
+                    batch_results = future.result()
+                    
+                    # 合并结果
+                    with lock:
+                        crawl_results.update(batch_results)
                 except Exception as e:
-                    logger.error(f"处理爬取任务结果时出错: {str(e)}")
+                    logger.error(f"处理批处理任务结果时出错: {str(e)}")
         
-        logger.info(f"查询类型 {query_type} 的 {len(links)} 个链接已全部处理完成，成功爬取 {len(crawl_results)} 个")
+        logger.info(f"查询类型 {query_type} 的 {len(links)} 个链接处理完成，成功爬取 {len(crawl_results)} 个")
         
         return crawl_results
     

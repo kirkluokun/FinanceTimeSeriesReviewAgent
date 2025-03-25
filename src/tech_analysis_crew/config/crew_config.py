@@ -21,10 +21,10 @@ class CrewConfig:
         """创建爬取代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini")
+        model_config = llm_config.get_model("gemini-2.0-flash")
         
         # 创建LLM配置
-        gemini_llm = LLM(
+        crawler_llm = LLM(
             provider=model_config["provider"],
             model=model_config["model"],
             temperature=0.7,
@@ -50,7 +50,7 @@ class CrewConfig:
             verbose=True,
             allow_delegation=False,
             tools=crawl_tools,
-            llm=gemini_llm
+            llm=crawler_llm
         )
         
         return crawler_agent
@@ -91,7 +91,6 @@ class CrewConfig:
         
         # 创建LLM配置
         conclusion_llm = LLM(
-            provider=model_config["provider"],
             model=model_config["model"],
             temperature=0.7,
             api_key=model_config["api_key"],

@@ -17,21 +17,21 @@ class LLMConfig:
     def __init__(self):
         """初始化 LLM 配置"""
         # 设置默认模型
-        self.default_model = "gemini"
+        self.default_model = "gemini-2.0-flash"
         
         # 确保环境变量已设置
         self._check_api_keys()
         
         # 初始化模型配置
         self.models = {
-            "gemini": {
+            "gemini-2.0-flash": {
                 "provider": "gemini",
                 "model": "gemini/gemini-2.0-flash",
                 "api_key": os.environ.get("GEMINI_API_KEY"),
             },
-            "gpt4o": {
+            "gpt-4o": {
                 "provider": "openai",
-                "model": "gpt-4o",
+                "model": "openai/gpt-4o",
                 "api_key": os.environ.get("OPENAI_API_KEY"),
             },
             "deepseek": {
@@ -56,7 +56,7 @@ class LLMConfig:
                 "api_key": os.environ.get("TOGETHER_API_KEY"),
                 "base_url": "https://api.together.xyz/v1",
                 "temperature": 0.7,
-                "max_tokens": 1000
+                "max_tokens": 8000
             }
         }
         
