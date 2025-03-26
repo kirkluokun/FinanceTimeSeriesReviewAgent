@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间序列分析工具 - 金融数据分析平台</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center py-3">
+                <h1 class="header-title"><i class="bi bi-graph-up-arrow"></i> 金融时间序列分析平台</h1>
+                <div class="header-actions">
+                    <button class="btn btn-outline-light" id="helpBtn">
+                        <i class="bi bi-question-circle"></i> 帮助
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="card-title section-title">
+                            <i class="bi bi-file-earmark-bar-graph"></i> 时间序列初始化处理
+                        </h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="upload-section mb-3">
+                                    <h3 class="subsection-title">上传 CSV 数据</h3>
+                                    <div class="upload-area" id="uploadArea">
+                                        <i class="bi bi-cloud-arrow-up-fill"></i>
+                                        <p>拖拽CSV文件到此处或点击选择文件</p>
+                                        <input type="file" id="csvFileInput" accept=".csv" class="hidden-input" />
+                                        <button class="btn btn-primary" id="selectFileBtn">选择文件</button>
+                                    </div>
+                                    <div class="mt-2" id="uploadInfo">
+                                        <span class="upload-status"></span>
+                                    </div>
+                                </div>
+
+                                <div class="processing-section mb-3">
+                                    <h3 class="subsection-title">数据处理</h3>
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <button class="btn btn-primary w-100" id="processBtn" disabled>
+                                                <i class="bi bi-gear"></i> 处理CSV数据
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="preview-section">
+                                    <h3 class="subsection-title">CSV 预览</h3>
+                                    <div class="csv-preview" id="csvPreview">
+                                        <p class="text-muted text-center">上传CSV文件后在此显示预览</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="results-section">
+                                    <h3 class="subsection-title">分析结果</h3>
+                                    <div class="row" id="analysisResults">
+                                        <div class="col-12 text-center text-muted">
+                                            <p>处理数据后在此显示结果</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="card-title section-title">
+                            <i class="bi bi-clock-history"></i> 趋势复盘分析
+                        </h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="upload-processed-section mb-3">
+                                    <h3 class="subsection-title">上传已处理的分析数据</h3>
+                                    <div class="upload-area" id="uploadProcessedArea">
+                                        <i class="bi bi-cloud-arrow-up-fill"></i>
+                                        <p>拖拽已处理的CSV文件到此处或点击选择文件</p>
+                                        <input type="file" id="processedFileInput" accept=".csv" class="hidden-input" />
+                                        <button class="btn btn-primary" id="selectProcessedBtn">选择文件</button>
+                                    </div>
+                                    <div class="mt-2" id="processedUploadInfo">
+                                        <span class="upload-status"></span>
+                                    </div>
+                                </div>
+
+                                <div class="analysis-section mb-3">
+                                    <h3 class="subsection-title">复盘分析选项</h3>
+                                    <div class="form-group mb-3">
+                                        <label for="queryInput">分析查询</label>
+                                        <input type="text" class="form-control" id="queryInput" 
+                                            placeholder="例如：分析铜价走势" value="分析铜价走势">
+                                    </div>
+                                    <button class="btn btn-primary" id="startAnalysisBtn" disabled>
+                                        <i class="bi bi-play-fill"></i> 开始复盘分析
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="processed-preview-section">
+                                    <h3 class="subsection-title">处理数据预览</h3>
+                                    <div class="csv-preview" id="processedPreview">
+                                        <p class="text-muted text-center">上传已处理的CSV文件后在此显示预览</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="log-section">
+                                    <h3 class="subsection-title">分析日志</h3>
+                                    <div class="log-container" id="logContainer">
+                                        <pre class="log-content" id="logContent">等待分析开始...</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center py-3">
+                <div class="footer-info">
+                    <p class="mb-0">金融时间序列分析平台 &copy; 2024</p>
+                </div>
+                <div class="footer-links">
+                    <a href="#" class="footer-link">关于我们</a>
+                    <a href="#" class="footer-link">联系我们</a>
+                    <a href="#" class="footer-link">使用条款</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 模态框：帮助 -->
+    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="helpModalLabel">使用帮助</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h4>时间序列初始化处理</h4>
+                    <ol>
+                        <li>上传CSV文件：将包含时间序列数据的CSV文件上传到系统。</li>
+                        <li>处理CSV数据：系统将自动分析文件并生成敏感版和不敏感版的分析结果。</li>
+                        <li>查看分析结果：在结果区域可以查看分析生成的图表和数据文件。</li>
+                        <li>编辑CSV数据：如需修改数据，可以使用编辑功能调整CSV内容。</li>
+                    </ol>
+                    
+                    <h4>趋势复盘分析</h4>
+                    <ol>
+                        <li>上传已处理的分析数据：将已完成初始化处理的CSV文件上传。</li>
+                        <li>设置分析查询：输入您希望进行的分析查询内容。</li>
+                        <li>开始复盘分析：系统将根据查询内容进行深度分析并生成报告。</li>
+                        <li>查看分析日志：在日志区域可以实时查看分析进度和结果。</li>
+                    </ol>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">了解</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.0.0/dist/ag-grid-community.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 

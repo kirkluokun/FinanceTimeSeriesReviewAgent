@@ -8,6 +8,11 @@ import datetime
 import pathlib
 from datetime import timedelta
 
+# 设置matplotlib字体
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Helvetica', 'Lucida Grande', 'Verdana']
+plt.rcParams['axes.unicode_minus'] = False
+
 class TrendAnalyzer:
     def __init__(self, atr_period=14, swing_threshold=0.618, order=5):
         """
@@ -732,15 +737,15 @@ def plot_trends(df, trends, output_path, price_col='close', dpi=800):
     
     # 添加图例
     legend_elements = [
-        Patch(facecolor='red', alpha=0.3, label='上升趋势'),
-        Patch(facecolor='green', alpha=0.3, label='下降趋势'),
-        Patch(facecolor='lightgrey', alpha=0.3, label='震荡区间')
+        Patch(facecolor='red', alpha=0.3, label='Uptrend'),
+        Patch(facecolor='green', alpha=0.3, label='Downtrend'),
+        Patch(facecolor='lightgrey', alpha=0.3, label='Consolidation')
     ]
     plt.legend(handles=legend_elements, fontsize=12)
     
-    plt.title('价格趋势分析', fontsize=16)
-    plt.xlabel('日期', fontsize=14)
-    plt.ylabel('价格', fontsize=14)
+    plt.title('Price Trend Analysis', fontsize=16)
+    plt.xlabel('Date', fontsize=14)
+    plt.ylabel('Price', fontsize=14)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
     

@@ -11,6 +11,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import warnings
 
+# 设置matplotlib字体
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Helvetica', 'Lucida Grande', 'Verdana']
+plt.rcParams['axes.unicode_minus'] = False
+
 # 导入两个分析模块
 # 注意：Python导入模块时不能包含短横线，需要进行特殊处理
 import importlib.util
@@ -260,9 +265,9 @@ def generate_comparison_report(df, sensitive_trends, insensitive_trends,
             df_trends['end_date'] = pd.to_datetime(df_trends['end_date'])
     
     # 计算持续天数
-    sensitive_trends['持续天数'] = (
+    sensitive_trends['duration_days'] = (
         (sensitive_trends['end_date'] - sensitive_trends['start_date']).dt.days)
-    insensitive_trends['持续天数'] = (
+    insensitive_trends['duration_days'] = (
         (insensitive_trends['end_date'] - insensitive_trends['start_date']).dt.days)
     
     # 统计基本信息
@@ -272,9 +277,9 @@ def generate_comparison_report(df, sensitive_trends, insensitive_trends,
         "下降趋势数": len(sensitive_trends[sensitive_trends['trend_type'] == 'down']),
         "震荡区间数": len(
             sensitive_trends[sensitive_trends['trend_type'] == 'consolidation']),
-        "平均区间长度(天)": sensitive_trends['持续天数'].mean(),
-        "最长区间(天)": sensitive_trends['持续天数'].max(),
-        "最短区间(天)": sensitive_trends['持续天数'].min(),
+        "平均区间长度(天)": sensitive_trends['duration_days'].mean(),
+        "最长区间(天)": sensitive_trends['duration_days'].max(),
+        "最短区间(天)": sensitive_trends['duration_days'].min(),
         "平均变动幅度(%)": sensitive_trends['pct_change'].abs().mean() * 100,
         "最大上涨幅度(%)": sensitive_trends['pct_change'].max() * 100,
         "最大下跌幅度(%)": sensitive_trends['pct_change'].min() * 100
@@ -286,9 +291,9 @@ def generate_comparison_report(df, sensitive_trends, insensitive_trends,
         "下降趋势数": len(insensitive_trends[insensitive_trends['trend_type'] == 'down']),
         "震荡区间数": len(
             insensitive_trends[insensitive_trends['trend_type'] == 'consolidation']),
-        "平均区间长度(天)": insensitive_trends['持续天数'].mean(),
-        "最长区间(天)": insensitive_trends['持续天数'].max(),
-        "最短区间(天)": insensitive_trends['持续天数'].min(),
+        "平均区间长度(天)": insensitive_trends['duration_days'].mean(),
+        "最长区间(天)": insensitive_trends['duration_days'].max(),
+        "最短区间(天)": insensitive_trends['duration_days'].min(),
         "平均变动幅度(%)": insensitive_trends['pct_change'].abs().mean() * 100,
         "最大上涨幅度(%)": insensitive_trends['pct_change'].max() * 100,
         "最大下跌幅度(%)": insensitive_trends['pct_change'].min() * 100
@@ -335,19 +340,19 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
     
     # 计算额外统计信息
     data_period = (
-        f"{df.index[0].strftime('%Y-%m-%d')} 至 {df.index[-1].strftime('%Y-%m-%d')}")
+        f"{df.index[0].strftime('%Y-%m-%d')} to {df.index[-1].strftime('%Y-%m-%d')}")
     total_days = (df.index[-1] - df.index[0]).days
     
     # 生成Markdown内容
-    md_content = f"""# 趋势分析比较报告
+    md_content = f"""# Trend Analysis Comparison Report
 
-**分析日期:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**数据文件:** {input_filename}  
-**数据周期:** {data_period} ({total_days}天)
+**Analysis Date:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Data File:** {input_filename}  
+**Data Period:** {data_period} ({total_days} days)
 
-## 统计比较
+## Statistical Comparison
 
-| 指标 | 敏感版分析 | 不敏感版分析 | 差异 | 差异百分比 |
+| Metric | Sensitive Analysis | Insensitive Analysis | Difference | Difference % |
 |------|------------|--------------|------|------------|
 """
     
@@ -372,20 +377,20 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
     
     # 添加敏感版趋势分布表格
     md_content += """
-## 敏感版趋势分布
+## Sensitive Version Trend Distribution
 
-| 开始日期 | 结束日期 | 趋势类型 | 持续天数 | 价格变动(%) | 最高价日期 | 最低价日期 |
+| Start Date | End Date | Trend Type | Duration (Days) | Price Change (%) | High Price Date | Low Price Date |
 |----------|----------|----------|----------|------------|-----------|-----------|
 """
     
     # 添加敏感版的每个趋势，转换趋势类型显示
     for _, trend in sensitive_trends.iterrows():
         price_change = trend['pct_change'] * 100
-        # 转换趋势类型为中文显示
+        # 转换趋势类型为英文显示
         trend_type_display = (
-            "上升" if trend['trend_type'] == 'up' 
-            else "下降" if trend['trend_type'] == 'down' 
-            else "震荡"
+            "Up" if trend['trend_type'] == 'up' 
+            else "Down" if trend['trend_type'] == 'down' 
+            else "Consolidation"
         )
         
         # 获取最高价和最低价日期，如果存在的话
@@ -396,7 +401,7 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
             f"| {trend['start_date'].strftime('%Y-%m-%d')} | "
             f"{trend['end_date'].strftime('%Y-%m-%d')} | "
             f"{trend_type_display} | "
-            f"{trend['持续天数']} | "
+            f"{trend['duration_days']} | "
             f"{price_change:.2f}% | "
             f"{high_price_date} | "
             f"{low_price_date} |\n"
@@ -404,20 +409,20 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
     
     # 添加不敏感版趋势分布表格
     md_content += """
-## 不敏感版趋势分布
+## Insensitive Version Trend Distribution
 
-| 开始日期 | 结束日期 | 趋势类型 | 持续天数 | 价格变动(%) | 最高价日期 | 最低价日期 |
+| Start Date | End Date | Trend Type | Duration (Days) | Price Change (%) | High Price Date | Low Price Date |
 |----------|----------|----------|----------|------------|-----------|-----------|
 """
     
     # 添加不敏感版的每个趋势，转换趋势类型显示
     for _, trend in insensitive_trends.iterrows():
         price_change = trend['pct_change'] * 100
-        # 转换趋势类型为中文显示
+        # 转换趋势类型为英文显示
         trend_type_display = (
-            "上升" if trend['trend_type'] == 'up' 
-            else "下降" if trend['trend_type'] == 'down' 
-            else "震荡"
+            "Up" if trend['trend_type'] == 'up' 
+            else "Down" if trend['trend_type'] == 'down' 
+            else "Consolidation"
         )
         
         # 获取最高价和最低价日期，如果存在的话
@@ -428,7 +433,7 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
             f"| {trend['start_date'].strftime('%Y-%m-%d')} | "
             f"{trend['end_date'].strftime('%Y-%m-%d')} | "
             f"{trend_type_display} | "
-            f"{trend['持续天数']} | "
+            f"{trend['duration_days']} | "
             f"{price_change:.2f}% | "
             f"{high_price_date} | "
             f"{low_price_date} |\n"
@@ -436,21 +441,21 @@ def generate_markdown_report(df, sensitive_trends, insensitive_trends, compariso
     
     # 添加趋势分布比较
     md_content += """
-## 趋势分析对比结论
+## Trend Analysis Comparison Conclusion
 
-- 敏感版分析倾向于捕捉更多的小波动，因此通常会产生更多的区间数量。
-- 不敏感版分析专注于更大的趋势变化，过滤掉短期波动，通常产生更少、更长的区间。
-- 两种方法各有优缺点：
-  - 敏感版适合短期交易策略，能捕捉更多交易机会。
-  - 不敏感版适合中长期趋势跟踪，减少错误信号。
-- 实际应用中可根据交易周期和风险偏好选择合适的方法。
+- Sensitive analysis tends to capture more minor fluctuations, thus typically generating more intervals.
+- Insensitive analysis focuses on larger trend changes, filtering out short-term fluctuations, typically producing fewer but longer intervals.
+- Both methods have their advantages and disadvantages:
+  - Sensitive version is suitable for short-term trading strategies, capturing more trading opportunities.
+  - Insensitive version is suitable for medium to long-term trend tracking, reducing false signals.
+- In practical applications, the appropriate method can be chosen based on trading cycle and risk preference.
 
-## 区间价格分析
+## Interval Price Analysis
 
-- 每个趋势区间内的最高价和最低价可以帮助理解价格波动的极值。
-- 最高价日期和最低价日期显示了区间内价格达到极值的时间点。
-- 这些信息对于理解趋势的形成和转折点非常有价值。
-- 在交易策略中，可以利用这些信息设置止损和止盈点位。
+- The highest and lowest prices within each trend interval help understand price fluctuation extremes.
+- High price dates and low price dates show when prices reached extremes within the interval.
+- This information is valuable for understanding trend formation and turning points.
+- In trading strategies, this information can be used to set stop-loss and take-profit levels.
 """
     
     # 写入Markdown文件
