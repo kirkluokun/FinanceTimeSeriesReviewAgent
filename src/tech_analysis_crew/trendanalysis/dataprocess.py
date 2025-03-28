@@ -336,7 +336,7 @@ def clean_value(val):
         return np.nan
 
 
-def main(input_path, output_dir=None):
+def main(input_path, output_dir='crewai-agent/src/tech_analysis_crew/trendanalysis/results'):
     """
     主函数，处理输入文件并生成标准化后的CSV
     

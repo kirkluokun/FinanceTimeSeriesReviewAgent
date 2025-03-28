@@ -71,6 +71,9 @@ logs/
 .coverage
 htmlcov/
 PRD-techanalysis.md
+cache/
+files/
+images/
 
 # 内存和临时文件
 memory/

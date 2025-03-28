@@ -101,7 +101,7 @@ def clean_data(df):
     return df
 
 
-def run_analysis(input_path, output_dir='results'):
+def run_analysis(input_path, output_dir='crewai-agent/src/tech_analysis_crew/trendanalysis/results'):
     """
     运行两种趋势分析方法并比较结果
     
@@ -470,7 +470,7 @@ if __name__ == "__main__":
         description="运行敏感和不敏感版本的趋势分析并生成比较报告")
     parser.add_argument("input_path", help="输入CSV文件的路径")
     parser.add_argument(
-        "--output-dir", default="results", help="输出目录，默认为results")
+        "--output-dir", default="crewai-agent/src/tech_analysis_crew/trendanalysis/results", help="输出目录，默认为results")
     
     args = parser.parse_args()
     

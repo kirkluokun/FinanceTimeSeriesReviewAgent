@@ -6,4 +6,11 @@ matplotlib>=3.7.1
 itsdangerous==2.2.0
 Jinja2>=3.1.2
 blinker>=1.9
-uuid==1.30 
+uuid==1.30
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+pydantic==2.4.2
+pandas>=1.5.3
+numpy>=1.24.3
+scipy>=1.10.0

@@ -753,7 +753,7 @@ def plot_trends(df, trends, output_path, price_col='close', dpi=800):
     plt.savefig(output_path, dpi=dpi)
     plt.close()
 
-def main(input_path, output_dir='results'):
+def main(input_path, output_dir='crewai-agent/src/tech_analysis_crew/trendanalysis/results'):
     # 读取数据
     df = pd.read_csv(input_path, parse_dates=['date'], index_col='date')
     df = df.sort_index()
@@ -849,7 +849,7 @@ if __name__ == "__main__":
         help='输入CSV文件路径'
     )
     parser.add_argument(
-        '--output', type=str, default='results', 
+        '--output', type=str, default='crewai-agent/src/tech_analysis_crew/trendanalysis/results', 
         help='输出目录路径，默认为results'
     )
     parser.add_argument(

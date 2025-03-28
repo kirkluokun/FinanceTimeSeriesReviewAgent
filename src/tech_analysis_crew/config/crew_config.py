@@ -47,7 +47,7 @@ class CrewConfig:
             backstory="""You are a professional web content intelligence specialist, skilled at extracting critical information from web pages with specific questions in mind.
             Your job is to crawl content from specified URLs, summarize key points for each page, and extract essential information.
             Important data from web pages must be recorded. You need to ensure the extracted content is accurate and complete, and provide summaries that precisely address the core issues.""",
-            verbose=True,
+            verbose=False,
             allow_delegation=False,
             tools=crawl_tools,
             llm=crawler_llm
@@ -77,7 +77,7 @@ class CrewConfig:
             backstory="""You are a financial analyst skilled at writing reports, with expertise in integrating and analyzing information.
             Your job is to take the prepared intelligence information from searches and write a complete report.
             You need to ensure the report has a clear structure, accurate content, and provides valuable, in-depth insights.""",
-            verbose=True,
+            verbose=False,
             allow_delegation=False,
             llm=report_llm
         )
@@ -104,7 +104,7 @@ class CrewConfig:
             You can organically integrate information from different reports, identify commonalities and differences, and reveal underlying patterns.
             You excel at grasping macro trends while paying attention to micro details, enabling readers to fully understand the logic behind market changes.
             Your analysis has both historical depth and forward-looking vision, providing readers with comprehensive and valuable market insights.""",
-            verbose=True,
+            verbose=False,
             allow_delegation=False,
             llm=conclusion_llm
         )
