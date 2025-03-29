@@ -378,9 +378,13 @@ async def run_analysis(request: AnalysisRequest, background_tasks: BackgroundTas
             raise HTTPException(status_code=400, detail="未指定输入文件")
             
         # 确认文件存在
+        # 先检查INPUT_DIR
         input_path = os.path.join(INPUT_DIR, input_file)
         if not os.path.exists(input_path):
-            raise HTTPException(status_code=404, detail=f"文件不存在: {input_file}")
+            # 如果不在INPUT_DIR，检查CACHE_DIR
+            input_path = os.path.join(CACHE_DIR, input_file)
+            if not os.path.exists(input_path):
+                raise HTTPException(status_code=404, detail=f"文件不存在: {input_file}")
             
         # 调用backend.py脚本
         run_backend_script = os.path.join(tech_analysis_dir, 'run_backend.py')

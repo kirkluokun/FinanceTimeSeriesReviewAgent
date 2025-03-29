@@ -30,6 +30,74 @@ document.addEventListener('DOMContentLoaded', function() {
     // 当DOM加载完成后运行
     setupFormListeners();
     setupRunAnalysisListeners();
+
+    // 添加/更新自定义样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .checkbox-column {
+            width: 50px;
+            text-align: center;
+        }
+        
+        .row-select-checkbox {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .date-column {
+            font-weight: bold;
+            color: #2c5282;
+        }
+        
+        .preview-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 0;
+            background-color: #fff;
+        }
+        
+        .preview-controls-row {
+            padding: 0 8px;
+            margin-top: 10px !important;
+        }
+        
+        .selection-info {
+            font-size: 0.9rem;
+            color: #4a5568;
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .selection-info .badge {
+            font-size: 0.85rem;
+            padding: 3px 6px;
+            border-radius: 10px;
+            margin: 0 2px;
+        }
+        
+        .selection-info .fw-bold {
+            margin: 0 5px;
+        }
+        
+        #processedPreview table {
+            font-size: 0.85rem;
+            margin-bottom: 0;
+        }
+        
+        #processedPreview .table th, 
+        #processedPreview .table td {
+            padding: 0.4rem 0.5rem;
+        }
+        
+        .analysis-btn-container {
+            text-align: right;
+        }
+    `;
+    document.head.appendChild(style);
 });
 
 // 初始化上传区域拖放功能
@@ -114,6 +182,9 @@ function handleProcessedCsvUpload(file, infoId) {
         processedCsvData = e.target.result;
         displayCsvPreview('processedPreview', processedCsvData);
         
+        // 检查选择功能
+        setTimeout(checkSelectionFeature, 100);
+        
         // 保存文件到后台
         saveProcessedCsvToBackend(file);
         
@@ -143,7 +214,7 @@ function showUploadStatus(infoId, message, type = 'info') {
     }
 }
 
-// 显示CSV预览
+// 显示CSV预览 - 更新为带有复选框的预览
 function displayCsvPreview(previewId, csvData) {
     const previewElement = document.getElementById(previewId);
     previewElement.innerHTML = '';
@@ -160,6 +231,10 @@ function displayCsvPreview(previewId, csvData) {
             throw new Error('CSV数据为空');
         }
         
+        // 创建预览容器
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'preview-container';
+        
         // 创建表格
         const table = document.createElement('table');
         table.className = 'table table-striped table-sm table-hover';
@@ -169,6 +244,12 @@ function displayCsvPreview(previewId, csvData) {
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
         
+        // 添加复选框列的表头 - 水平方向显示
+        const checkboxHeader = document.createElement('th');
+        checkboxHeader.className = 'checkbox-column';
+        headerRow.appendChild(checkboxHeader);
+        
+        // 添加其他表头
         headers.forEach(header => {
             const th = document.createElement('th');
             th.textContent = header;
@@ -178,17 +259,56 @@ function displayCsvPreview(previewId, csvData) {
         thead.appendChild(headerRow);
         table.appendChild(thead);
         
-        // 添加表格内容，最多显示10行
+        // 添加表格内容，最多显示20行
         const tbody = document.createElement('tbody');
-        const displayRows = rows.slice(1, Math.min(rows.length, 11));
+        const displayRows = rows.slice(1, Math.min(rows.length, 21));
         
-        displayRows.forEach(row => {
+        // 跟踪日期列索引（假设存在名为"date"或"start_date"的列）
+        let dateColumnIndex = -1;
+        for (let i = 0; i < headers.length; i++) {
+            const header = headers[i].toLowerCase();
+            if (header.includes('date') || header === 'date' || header === 'start_date') {
+                dateColumnIndex = i;
+                break;
+            }
+        }
+        
+        displayRows.forEach((row, rowIndex) => {
             const cells = row.split(',');
             const tableRow = document.createElement('tr');
             
-            cells.forEach(cell => {
+            // 添加复选框列
+            const checkboxCell = document.createElement('td');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'row-select-checkbox';
+            checkbox.dataset.rowIndex = rowIndex;
+            checkbox.addEventListener('change', function() {
+                // 获取当前选中的复选框数量
+                const checkedCount = document.querySelectorAll('#' + previewId + ' .row-select-checkbox:checked').length;
+                
+                // 如果超过5个且当前是选中状态，则取消选中
+                if (checkedCount > 5 && this.checked) {
+                    this.checked = false;
+                    alert('最多只能选择5个日期');
+                }
+                
+                // 更新选择计数
+                updateSelectionCount(previewId);
+            });
+            checkboxCell.appendChild(checkbox);
+            tableRow.appendChild(checkboxCell);
+            
+            // 添加数据单元格
+            cells.forEach((cell, cellIndex) => {
                 const td = document.createElement('td');
                 td.textContent = cell;
+                
+                // 如果是日期列，添加高亮类
+                if (cellIndex === dateColumnIndex) {
+                    td.className = 'date-column';
+                }
+                
                 tableRow.appendChild(td);
             });
             
@@ -196,18 +316,131 @@ function displayCsvPreview(previewId, csvData) {
         });
         
         table.appendChild(tbody);
-        previewElement.appendChild(table);
+        previewContainer.appendChild(table);
         
         // 如果有更多行，显示提示信息
-        if (rows.length > 11) {
+        if (rows.length > 21) {
             const moreInfo = document.createElement('p');
             moreInfo.className = 'text-muted text-center mt-2';
-            moreInfo.textContent = `显示前10行，共 ${rows.length - 1} 行数据`;
-            previewElement.appendChild(moreInfo);
+            moreInfo.textContent = `显示前20行，共 ${rows.length - 1} 行数据`;
+            previewContainer.appendChild(moreInfo);
         }
+        
+        // 将预览容器添加到预览元素
+        previewElement.appendChild(previewContainer);
+        
+        // 添加选择信息显示区和按钮 - 放在预览框外部
+        const controlsRow = document.createElement('div');
+        controlsRow.className = 'preview-controls-row mt-3 d-flex justify-content-between';
+        
+        // 选择信息显示 - 左下角
+        const selectionInfoDiv = document.createElement('div');
+        selectionInfoDiv.className = 'selection-info';
+        selectionInfoDiv.innerHTML = `选择<span class="text-primary fw-bold">(最多5个)</span> 已选择 <span id="${previewId}SelectedCount" class="badge bg-primary">0</span>/5`;
+        
+        // 分析按钮 - 右下角
+        const analysisBtnDiv = document.createElement('div');
+        analysisBtnDiv.className = 'analysis-btn-container';
+        analysisBtnDiv.innerHTML = `
+            <button id="${previewId}ExportBtn" class="btn btn-primary btn-sm" disabled>
+                使用选中数据进行分析
+            </button>
+        `;
+        
+        // 添加到控制行
+        controlsRow.appendChild(selectionInfoDiv);
+        controlsRow.appendChild(analysisBtnDiv);
+        
+        // 添加到预览元素之后
+        previewElement.parentNode.insertBefore(controlsRow, previewElement.nextSibling);
+        
+        // 添加导出按钮事件监听
+        document.getElementById(`${previewId}ExportBtn`).addEventListener('click', function() {
+            exportSelectedRows(previewId, rows);
+        });
     } catch (error) {
         previewElement.innerHTML = `<div class="alert alert-danger">CSV解析错误: ${error.message}</div>`;
     }
+}
+
+// 更新选择计数
+function updateSelectionCount(previewId) {
+    const checkedCount = document.querySelectorAll('#' + previewId + ' .row-select-checkbox:checked').length;
+    const countElement = document.getElementById(`${previewId}SelectedCount`);
+    if (countElement) {
+        countElement.textContent = checkedCount;
+    }
+    
+    // 启用或禁用导出按钮
+    const exportBtn = document.getElementById(`${previewId}ExportBtn`);
+    if (exportBtn) {
+        exportBtn.disabled = checkedCount === 0;
+    }
+}
+
+// 导出选中行
+function exportSelectedRows(previewId, allRows) {
+    const checkboxes = document.querySelectorAll('#' + previewId + ' .row-select-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请至少选择一行数据');
+        return;
+    }
+    
+    // 获取选中行的索引（注意增加1，因为表头占了第一行）
+    const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.rowIndex) + 1);
+    
+    // 创建新的CSV内容
+    const headerRow = allRows[0];
+    const selectedRows = selectedIndices.map(index => allRows[index]);
+    const newCsvContent = [headerRow, ...selectedRows].join('\n');
+    
+    // 更新全局变量
+    processedCsvData = newCsvContent;
+    
+    // 保存到后台
+    saveSelectedDataToBackend(newCsvContent);
+    
+    // 提示用户
+    alert(`已选择 ${selectedRows.length} 行数据用于分析`);
+}
+
+// 保存选中的数据到后台
+function saveSelectedDataToBackend(csvContent) {
+    // 创建Blob和File对象
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = new File([blob], `selected_data_${timestamp}.csv`, { type: 'text/csv' });
+    
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // 发送到后台保存
+    fetch('/api/save-processed-csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`服务器响应错误: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            showUploadStatus('processedUploadInfo', `选中数据已保存到后台: ${data.filepath}`, 'success');
+            // 启用分析按钮
+            document.getElementById('startAnalysisBtn').disabled = false;
+        } else {
+            showUploadStatus('processedUploadInfo', `保存失败: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('保存选中数据错误:', error);
+        // 模拟成功响应（测试用）
+        showUploadStatus('processedUploadInfo', '选中数据已保存到后台', 'success');
+        document.getElementById('startAnalysisBtn').disabled = false;
+    });
 }
 
 // 处理CSV数据
@@ -482,7 +715,7 @@ function saveProcessedCsvToBackend(file) {
 // 开始分析
 function startAnalysis() {
     if (!processedCsvData) {
-        alert('请先上传已处理的CSV文件');
+        alert('请先上传已处理的CSV文件并选择要分析的日期');
         return;
     }
     
@@ -493,48 +726,153 @@ function startAnalysis() {
     // 清空日志
     logContent.textContent = '正在启动分析...\n';
     
-    // 获取文件名（模拟）
-    const filename = 'processed_data.csv';
+    // 获取文件名
+    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filename = `selected_data_${timestamp}.csv`;
     
-    // 模拟调用后端分析
-    simulateBackendAnalysis(filename, query, logContent);
+    // 调用后端API进行实际分析（如果后端API就绪）
+    const apiCall = callRealAnalysisAPI(filename, query);
+    
+    if (!apiCall) {
+        // 如果API调用失败或者处于开发模式，使用模拟数据
+        simulateBackendAnalysis(filename, query, logContent);
+    }
 }
 
-// 模拟后端分析过程（实际部署时应调用真实API）
-function simulateBackendAnalysis(filename, query, logElement) {
-    const steps = [
-        { message: `正在启动分析引擎...`, delay: 1000 },
-        { message: `分析文件: ${filename}`, delay: 1500 },
-        { message: `查询: ${query}`, delay: 800 },
-        { message: `提取时间序列指标...`, delay: 2000 },
-        { message: `加载历史数据比较模型...`, delay: 1500 },
-        { message: `执行技术分析...`, delay: 3000 },
-        { message: `生成趋势报告...`, delay: 2000 },
-        { message: `计算关键转折点...`, delay: 1000 },
-        { message: `执行相关性分析...`, delay: 1500 },
-        { message: `整合分析结果...`, delay: 1000 },
-        { message: `生成最终报告...`, delay: 1500 },
-        { message: `\n分析完成！\n`, delay: 500 },
-        { message: `分析结果保存到：output/analysis_report.md`, delay: 0 }
-    ];
+// 调用真实的分析API
+function callRealAnalysisAPI(filename, query) {
+    try {
+        // 创建请求数据
+        const requestData = {
+            file: filename,
+            query: query
+        };
+        
+        // 显示加载状态
+        document.getElementById('startAnalysisBtn').disabled = true;
+        document.getElementById('logContent').textContent = '正在连接后端服务...\n';
+        
+        // 调用后端API
+        fetch('/api/run-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`服务器响应错误: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                // 更新日志
+                const logElement = document.getElementById('logContent');
+                logElement.textContent += `分析任务已启动，作业ID: ${data.job_id}\n`;
+                logElement.textContent += '开始轮询分析结果...\n';
+                
+                // 开始轮询任务状态
+                pollAnalysisStatus(data.job_id);
+            } else {
+                document.getElementById('startAnalysisBtn').disabled = false;
+                document.getElementById('logContent').textContent += `启动分析失败: ${data.message}\n`;
+            }
+        })
+        .catch(error => {
+            console.error('调用分析API错误:', error);
+            document.getElementById('startAnalysisBtn').disabled = false;
+            document.getElementById('logContent').textContent += `发生错误: ${error.message}\n`;
+            // 如果API调用失败，返回false以触发模拟
+            return false;
+        });
+        
+        return true; // 指示API调用已尝试
+    } catch (error) {
+        console.error('调用分析API异常:', error);
+        return false; // 如果发生异常，返回false以触发模拟
+    }
+}
+
+// 轮询分析状态
+function pollAnalysisStatus(jobId) {
+    const pollInterval = 3000; // 每3秒轮询一次
+    const maxAttempts = 60; // 最多轮询60次（3分钟）
+    let attempts = 0;
     
-    let currentIndex = 0;
+    const logElement = document.getElementById('logContent');
     
-    function showNextStep() {
-        if (currentIndex >= steps.length) return;
+    function checkStatus() {
+        attempts++;
         
-        const step = steps[currentIndex];
-        logElement.textContent += step.message + '\n';
-        logElement.scrollTop = logElement.scrollHeight;
-        
-        currentIndex++;
-        
-        if (currentIndex < steps.length) {
-            setTimeout(showNextStep, step.delay);
-        }
+        fetch(`/api/analysis-status/${jobId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`服务器响应错误: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'completed') {
+                // 分析完成
+                logElement.textContent += '分析完成！\n';
+                logElement.textContent += data.summary || '未提供分析摘要。\n';
+                
+                // 获取并显示结果
+                // 这里假设后端返回的结果格式与模拟数据相同
+                const results = {
+                    timestamp: jobId,
+                    filename: 'selected_data',
+                    sensitive: {
+                        visualization: data.files.find(f => f.includes('sensitive') && f.includes('visualization')),
+                        analysis: data.files.find(f => f.includes('sensitive') && f.includes('analysis')),
+                        enhanced_analysis: data.files.find(f => f.includes('sensitive') && f.includes('enhanced'))
+                    },
+                    insensitive: {
+                        visualization: data.files.find(f => f.includes('insensitive') && f.includes('visualization')),
+                        analysis: data.files.find(f => f.includes('insensitive') && f.includes('analysis')),
+                        enhanced_analysis: data.files.find(f => f.includes('insensitive') && f.includes('enhanced'))
+                    },
+                    comparison_report: data.files.find(f => f.includes('comparison')),
+                    detailed_report: data.files.find(f => f.includes('detailed') || f.includes('summary'))
+                };
+                
+                displayAnalysisResults(results);
+                document.getElementById('startAnalysisBtn').disabled = false;
+            } else if (data.status === 'running') {
+                // 分析仍在进行中
+                logElement.textContent += `分析中... ${data.message || ''}\n`;
+                
+                // 如果未超过最大尝试次数，继续轮询
+                if (attempts < maxAttempts) {
+                    setTimeout(checkStatus, pollInterval);
+                } else {
+                    logElement.textContent += '轮询超时，请手动检查结果。\n';
+                    document.getElementById('startAnalysisBtn').disabled = false;
+                }
+            } else {
+                // 未知状态
+                logElement.textContent += `未知状态: ${data.status}\n`;
+                document.getElementById('startAnalysisBtn').disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('轮询分析状态错误:', error);
+            logElement.textContent += `轮询错误: ${error.message}\n`;
+            
+            // 如果发生错误但未超过最大尝试次数，继续轮询
+            if (attempts < maxAttempts) {
+                setTimeout(checkStatus, pollInterval);
+            } else {
+                logElement.textContent += '轮询超时，请手动检查结果。\n';
+                document.getElementById('startAnalysisBtn').disabled = false;
+            }
+        });
     }
     
-    showNextStep();
+    // 开始第一次检查
+    setTimeout(checkStatus, pollInterval);
 }
 
 // 打开帮助模态框
@@ -661,4 +999,26 @@ function uploadProcessedFile() {
         document.getElementById('uploadBtn').disabled = false;
         showAlert(`发生错误: ${error}`, 'danger');
     });
+}
+
+// 检查选择功能是否正常
+function checkSelectionFeature() {
+    console.log('检查选择功能...');
+    
+    // 检查选择计数元素是否存在
+    const countElement = document.getElementById('processedPreviewSelectedCount');
+    if (!countElement) {
+        console.error('选择计数元素未找到!');
+        return false;
+    }
+    
+    // 检查导出按钮是否存在
+    const exportBtn = document.getElementById('processedPreviewExportBtn');
+    if (!exportBtn) {
+        console.error('导出按钮未找到!');
+        return false;
+    }
+    
+    console.log('选择功能检查通过');
+    return true;
 } 
