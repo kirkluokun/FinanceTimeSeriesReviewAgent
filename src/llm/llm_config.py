@@ -39,9 +39,9 @@ class LLMConfig:
                 "model": "deepseek/deepseek-chat",
                 "api_key": os.environ.get("DEEPSEEK_API_KEY"),
             },
-            "gemini-2.0-pro": {
+            "gemini-2.5-pro": {
                 "provider": "gemini",
-                "model": "gemini/gemini-2.0-pro-exp-02-05",
+                "model": "gemini/gemini-2.5-pro-exp-03-25",
                 "api_key": os.environ.get("GEMINI_API_KEY"),
             },
             "deepseek-v3-ARK": {

@@ -60,7 +60,7 @@ class CrewConfig:
         """创建报告生成代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini-2.0-pro")
+        model_config = llm_config.get_model("gemini-2.0-flash")
         
         # 创建LLM配置
         report_llm = LLM(
@@ -87,7 +87,7 @@ class CrewConfig:
         """创建总结代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("deepseek-v3-togetherai")
+        model_config = llm_config.get_model("gemini-2.0-flash")
         
         # 创建LLM配置
         conclusion_llm = LLM(
