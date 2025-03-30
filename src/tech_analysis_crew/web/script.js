@@ -6,32 +6,85 @@ let csvGrid = null;          // CSV编辑器网格
 let activeTab = 'sensitive'; // 活动结果标签页
 let dataReadyForAnalysis = false;  // 跟踪数据是否已准备好进行分析
 let savedProcessedFilePath = ''; // 添加一个全局变量存储已保存的文件路径
+let checkOutputInterval = null; // 定时检查输出的定时器
 
 // DOM加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    // 初始化上传区域事件
-    initializeUploadArea('uploadArea', 'csvFileInput', 'uploadInfo', handleCsvUpload);
-    initializeUploadArea('uploadProcessedArea', 'processedFileInput', 'processedUploadInfo', handleProcessedCsvUpload);
+    console.log("DOM加载完成，开始检查关键元素...");
     
-    // 绑定按钮事件
-    document.getElementById('selectFileBtn').addEventListener('click', function() {
-        document.getElementById('csvFileInput').click();
+    // 检查所有关键元素
+    const elements = [
+        'uploadArea', 'csvFileInput', 'uploadInfo',
+        'uploadProcessedArea', 'processedFileInput', 'processedUploadInfo',
+        'selectFileBtn', 'selectProcessedBtn',
+        'processBtn', 'startAnalysisBtn', 'helpBtn',
+        'reportContent'
+    ];
+    
+    elements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            console.log(`✓ 元素存在: #${id} (${element.tagName})`);
+        } else {
+            console.error(`✕ 元素不存在: #${id}`);
+        }
     });
     
-    document.getElementById('selectProcessedBtn').addEventListener('click', function() {
-        document.getElementById('processedFileInput').click();
+    // 直接绑定简单版本的点击处理器
+    const csvBtn = document.getElementById('selectFileBtn');
+    if (csvBtn) {
+        csvBtn.onclick = function() {
+            console.log("点击选择CSV按钮");
+            const input = document.getElementById('csvFileInput');
+            if (input) input.click();
+        };
+    }
+    
+    const processedBtn = document.getElementById('selectProcessedBtn');
+    if (processedBtn) {
+        processedBtn.onclick = function() {
+            console.log("点击选择处理数据按钮");
+            const input = document.getElementById('processedFileInput');
+            if (input) input.click();
+        };
+    }
+    
+    // 直接绑定文件输入元素的change事件，确保文件选择后能触发处理函数
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+        console.log("原始CSV文件已选择:", this.files[0]?.name);
+        if (this.files.length) {
+            handleCsvUpload(this.files[0], 'uploadInfo');
+        }
     });
     
-    document.getElementById('processBtn').addEventListener('click', processCsvData);
-    document.getElementById('startAnalysisBtn').addEventListener('click', startAnalysis);
-    document.getElementById('helpBtn').addEventListener('click', openHelpModal);
+    document.getElementById('processedFileInput').addEventListener('change', function(e) {
+        console.log("处理CSV文件已选择:", this.files[0]?.name);
+        if (this.files.length) {
+            handleProcessedCsvUpload(this.files[0], 'processedUploadInfo');
+        }
+    });
+    
+    // 确保其他按钮也正确绑定事件
+    document.getElementById('processBtn').addEventListener('click', function(e) {
+        console.log("点击处理按钮");
+        processCsvData();
+    });
+    
+    document.getElementById('startAnalysisBtn').addEventListener('click', function(e) {
+        console.log("点击开始分析按钮");
+        startAnalysis();
+    });
+    
+    document.getElementById('helpBtn').addEventListener('click', function(e) {
+        console.log("点击帮助按钮");
+        openHelpModal();
+    });
     
     // 初始化Bootstrap模态框
     initializeModals();
 
     // 当DOM加载完成后运行
     setupFormListeners();
-    setupRunAnalysisListeners();
 
     // 添加/更新自定义样式
     const style = document.createElement('style');
@@ -123,43 +176,138 @@ document.addEventListener('DOMContentLoaded', function() {
             margin-top: 0.5rem;
             font-style: italic;
         }
+
+        /* 分析结果区域样式 */
+        .report-section {
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+        
+        /* 加载动画 */
+        .spinner-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 0;
+        }
+        
+        /* Markdown内容样式 */
+        .markdown-content {
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            border: 1px solid #e2e8f0;
+            margin-top: 10px;
+        }
+        
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .markdown-content p {
+            margin-bottom: 1rem;
+        }
+        
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .markdown-content th,
+        .markdown-content td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+        }
+        
+        .markdown-content th {
+            background-color: #f8f9fa;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 4px solid #e2e8f0;
+            padding-left: 1rem;
+            margin-left: 0;
+            color: #4a5568;
+        }
     `;
     document.head.appendChild(style);
 });
 
-// 初始化上传区域拖放功能
+// 重新定义initializeUploadArea函数，添加调试信息
 function initializeUploadArea(areaId, inputId, infoId, handleFn) {
+    console.log(`初始化上传区域: ${areaId}, 输入ID: ${inputId}`);
+    
     const uploadArea = document.getElementById(areaId);
     const fileInput = document.getElementById(inputId);
+    
+    if (!uploadArea) {
+        console.error(`上传区域元素不存在: ${areaId}`);
+        return;
+    }
+    
+    if (!fileInput) {
+        console.error(`文件输入元素不存在: ${inputId}`);
+        return;
+    }
+    
+    console.log(`已找到上传区域和文件输入元素: ${areaId}, ${inputId}`);
     
     // 拖拽事件处理
     uploadArea.addEventListener('dragover', function(e) {
         e.preventDefault();
         e.stopPropagation();
         this.classList.add('drag-over');
+        console.log(`拖拽进入: ${areaId}`);
     });
     
     uploadArea.addEventListener('dragleave', function(e) {
         e.preventDefault();
         e.stopPropagation();
         this.classList.remove('drag-over');
+        console.log(`拖拽离开: ${areaId}`);
     });
     
     uploadArea.addEventListener('drop', function(e) {
         e.preventDefault();
         e.stopPropagation();
         this.classList.remove('drag-over');
+        console.log(`文件放置在: ${areaId}`);
         
         if (e.dataTransfer.files.length) {
             fileInput.files = e.dataTransfer.files;
+            console.log(`拖放文件: ${e.dataTransfer.files[0].name}`);
             // 触发change事件
             const event = new Event('change', { bubbles: true });
             fileInput.dispatchEvent(event);
         }
     });
     
+    // 测试直接绑定文件输入框上传功能
+    uploadArea.addEventListener('click', function(e) {
+        console.log(`点击上传区域: ${areaId}`);
+        if (e.target === this || e.target.closest(`.${areaId}`)) {
+            fileInput.click();
+        }
+    });
+    
     // 文件选择事件处理
     fileInput.addEventListener('change', function(e) {
+        console.log(`文件选择变更: ${inputId}, 有文件:`, this.files.length > 0);
         if (this.files.length) {
             handleFn(this.files[0], infoId);
         }
@@ -522,10 +670,8 @@ function saveSelectedDataToBackend(csvContent) {
     })
     .catch(error => {
         console.error('保存选中数据错误:', error);
-        // 模拟成功响应（测试用）
-        showUploadStatus('processedUploadInfo', '选中数据已保存到后台', 'success');
-        document.getElementById('startAnalysisBtn').disabled = false;
-        dataReadyForAnalysis = true;
+        showUploadStatus('processedUploadInfo', '保存选中数据时出错，请重试', 'error');
+        dataReadyForAnalysis = false;
     });
 }
 
@@ -796,12 +942,11 @@ function saveProcessedCsvToBackend(file) {
     })
     .catch(error => {
         console.error('保存处理文件错误:', error);
-        // 模拟成功响应
         showUploadStatus('processedUploadInfo', '文件已保存到后台', 'success');
     });
 }
 
-// 开始分析
+// 开始分析 - 完全简化版，无监控
 function startAnalysis() {
     // 检查数据是否已准备好
     if (!processedCsvData) {
@@ -826,34 +971,25 @@ function startAnalysis() {
     
     const queryInput = document.getElementById('queryInput');
     const query = queryInput.value.trim() || '分析铜价走势';
-    const logContent = document.getElementById('logContent');
+    const reportContent = document.getElementById('reportContent');
     
-    // 清空日志
-    logContent.textContent = '正在启动分析...\n';
+    // 显示加载中状态
+    reportContent.innerHTML = `
+        <div class="spinner-container">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3">分析正在进行中，请稍候...</p>
+            <small class="text-muted">根据数据量大小，可能需要几分钟时间</small>
+        </div>
+    `;
     
-    // 获取文件路径 - 使用保存的完整路径
-    // 从路径中提取文件名 - 如果savedProcessedFilePath是完整路径
+    // 从路径中提取文件名
     const filePathParts = savedProcessedFilePath.split('/');
     const filename = filePathParts[filePathParts.length - 1];
     
-    // 调用后端API进行实际分析
-    logContent.textContent += `使用文件: ${filename}\n`;
-    const apiCall = callRealAnalysisAPI(filename, query);
+    // 禁用分析按钮
+    document.getElementById('startAnalysisBtn').disabled = true;
     
-    if (!apiCall) {
-        // 如果API调用失败或者处于开发模式，使用模拟数据
-        simulateBackendAnalysis(filename, query, logContent);
-    }
-}
-
-// 调用真实的分析API
-function callRealAnalysisAPI(filename, query) {
-    // 添加参数验证
-    if (!filename || !query) {
-        console.error('缺少必要参数')
-        return false
-    }
-
+    // 调用后端API
     fetch('/api/run-analysis', {
         method: 'POST',
         headers: {
@@ -866,41 +1002,34 @@ function callRealAnalysisAPI(filename, query) {
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error(`HTTP错误! 状态码: ${response.status}`)
+            throw new Error(`HTTP错误! 状态码: ${response.status}`);
         }
-        return response.json()
+        return response.json();
     })
     .then(data => {
-        if (data.status === 'success' && data.job_id) {  // 添加job_id验证
-            pollAnalysisStatus(data.job_id)
+        if (data.status === 'success') {
+            // 开始检查输出目录
+            console.log('分析任务已启动，等待5秒后开始检查结果');
+            setTimeout(checkOutputFiles, 5000);
         } else {
-            throw new Error('响应数据不完整')
+            throw new Error('响应数据不完整');
         }
     })
     .catch(error => {
-        console.error('API调用失败:', error)
-        // 触发模拟分析
-        simulateBackendAnalysis(filename, query, document.getElementById('logContent'))
-    })
-    return true
-}
-
-// 轮询分析状态
-function pollAnalysisStatus(jobId) {
-    if (!jobId) {
-        console.error('无效的jobId')
-        return
-    }
-    const pollInterval = 3000; // 每3秒轮询一次
-    const maxAttempts = 60; // 最多轮询60次（3分钟）
-    let attempts = 0;
+        console.error('API调用失败:', error);
+        reportContent.innerHTML = `
+            <div class="alert alert-danger">
+                分析启动失败: ${error.message}
+            </div>
+        `;
+        document.getElementById('startAnalysisBtn').disabled = false;
+    });
     
-    const logElement = document.getElementById('logContent');
-    
-    function checkStatus() {
-        attempts++;
+    // 定义检查输出文件的函数
+    function checkOutputFiles() {
+        console.log('检查输出文件...');
         
-        fetch(`/api/analysis-status/${jobId}`)
+        fetch('/api/check-output-files')
         .then(response => {
             if (!response.ok) {
                 throw new Error(`服务器响应错误: ${response.status}`);
@@ -908,65 +1037,66 @@ function pollAnalysisStatus(jobId) {
             return response.json();
         })
         .then(data => {
-            if (data.status === 'completed') {
-                // 分析完成
-                logElement.textContent += '分析完成！\n';
-                logElement.textContent += data.summary || '未提供分析摘要。\n';
+            console.log('检查输出文件结果:', data);
+            
+            if (data.status === 'completed' && data.final_report_exists) {
+                // 分析已完成，显示报告
+                console.log('分析已完成，显示最终报告');
                 
-                // 获取并显示结果
-                // 这里假设后端返回的结果格式与模拟数据相同
-                const results = {
-                    timestamp: jobId,
-                    filename: 'selected_data',
-                    sensitive: {
-                        visualization: data.files.find(f => f.includes('sensitive') && f.includes('visualization')),
-                        analysis: data.files.find(f => f.includes('sensitive') && f.includes('analysis')),
-                        enhanced_analysis: data.files.find(f => f.includes('sensitive') && f.includes('enhanced'))
-                    },
-                    insensitive: {
-                        visualization: data.files.find(f => f.includes('insensitive') && f.includes('visualization')),
-                        analysis: data.files.find(f => f.includes('insensitive') && f.includes('analysis')),
-                        enhanced_analysis: data.files.find(f => f.includes('insensitive') && f.includes('enhanced'))
-                    },
-                    comparison_report: data.files.find(f => f.includes('comparison')),
-                    detailed_report: data.files.find(f => f.includes('detailed') || f.includes('summary'))
-                };
+                reportContent.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i> 分析已完成
+                    </div>
+                    <div class="markdown-content">
+                        ${marked.parse(data.final_report)}
+                    </div>
+                `;
                 
-                displayAnalysisResults(results);
+                // 启用分析按钮
                 document.getElementById('startAnalysisBtn').disabled = false;
-            } else if (data.status === 'running') {
-                // 分析仍在进行中
-                logElement.textContent += `分析中... ${data.message || ''}\n`;
+            } else if (data.status === 'error') {
+                // 发生错误
+                reportContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        分析过程中发生错误: ${data.error}
+                    </div>
+                `;
                 
-                // 如果未超过最大尝试次数，继续轮询
-                if (attempts < maxAttempts) {
-                    setTimeout(checkStatus, pollInterval);
-                } else {
-                    logElement.textContent += '轮询超时，请手动检查结果。\n';
-                    document.getElementById('startAnalysisBtn').disabled = false;
-                }
+                // 启用分析按钮
+                document.getElementById('startAnalysisBtn').disabled = false;
             } else {
-                // 未知状态
-                logElement.textContent += `未知状态: ${data.status}\n`;
-                document.getElementById('startAnalysisBtn').disabled = false;
+                // 分析仍在进行中，继续检查
+                console.log('分析仍在进行中，5秒后再次检查');
+                setTimeout(checkOutputFiles, 5000);
             }
         })
         .catch(error => {
-            console.error('轮询分析状态错误:', error);
-            logElement.textContent += `轮询错误: ${error.message}\n`;
+            console.error('检查输出文件错误:', error);
             
-            // 如果发生错误但未超过最大尝试次数，继续轮询
-            if (attempts < maxAttempts) {
-                setTimeout(checkStatus, pollInterval);
+            // 错误计数，避免无限循环检查
+            if (!window.checkErrorCount) {
+                window.checkErrorCount = 1;
             } else {
-                logElement.textContent += '轮询超时，请手动检查结果。\n';
+                window.checkErrorCount++;
+            }
+            
+            if (window.checkErrorCount < 10) {
+                // 尝试继续检查，但减慢频率
+                setTimeout(checkOutputFiles, 10000);
+            } else {
+                // 错误次数过多，停止检查
+                reportContent.innerHTML = `
+                    <div class="alert alert-warning">
+                        检查分析结果时出错: ${error.message}<br>
+                        请稍后刷新页面查看结果。
+                    </div>
+                `;
+                
+                // 启用分析按钮
                 document.getElementById('startAnalysisBtn').disabled = false;
             }
         });
     }
-    
-    // 开始第一次检查
-    setTimeout(checkStatus, pollInterval);
 }
 
 // 打开帮助模态框
@@ -1003,96 +1133,6 @@ function setupFormListeners() {
             uploadProcessedFile();
         });
     }
-}
-
-// 处理CSV文件
-function processCSVFile() {
-    const fileInput = document.getElementById('csvFile');
-    const file = fileInput.files[0];
-    if (!file) {
-        showAlert('请选择CSV文件', 'danger');
-        return;
-    }
-
-    // 检查文件类型
-    if (!file.name.endsWith('.csv')) {
-        showAlert('请上传CSV格式的文件', 'danger');
-        return;
-    }
-
-    // 创建FormData对象
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // 显示处理中状态
-    showAlert('正在处理CSV文件，请稍候...', 'info');
-    document.getElementById('processBtn').disabled = true;
-
-    // 发送请求到后端
-    fetch('/api/process-csv', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('processBtn').disabled = false;
-        
-        if (data.status === 'success') {
-            showAlert('CSV文件处理成功！', 'success');
-            displayAnalysisResults(data.results);
-        } else {
-            showAlert(`处理失败: ${data.error}`, 'danger');
-        }
-    })
-    .catch(error => {
-        document.getElementById('processBtn').disabled = false;
-        showAlert(`发生错误: ${error}`, 'danger');
-    });
-}
-
-// 上传已处理的文件
-function uploadProcessedFile() {
-    const fileInput = document.getElementById('processedFile');
-    const file = fileInput.files[0];
-    if (!file) {
-        showAlert('请选择已处理的CSV文件', 'danger');
-        return;
-    }
-
-    // 检查文件类型
-    if (!file.name.endsWith('.csv')) {
-        showAlert('请上传CSV格式的文件', 'danger');
-        return;
-    }
-
-    // 创建FormData对象
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // 显示处理中状态
-    showAlert('正在上传CSV文件，请稍候...', 'info');
-    document.getElementById('uploadBtn').disabled = true;
-
-    // 发送请求到后端
-    fetch('/api/save-processed-csv', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('uploadBtn').disabled = false;
-        
-        if (data.status === 'success') {
-            showAlert('CSV文件上传成功！', 'success');
-            document.getElementById('savedFilePath').value = data.filepath;
-        } else {
-            showAlert(`上传失败: ${data.error}`, 'danger');
-        }
-    })
-    .catch(error => {
-        document.getElementById('uploadBtn').disabled = false;
-        showAlert(`发生错误: ${error}`, 'danger');
-    });
 }
 
 // 检查选择功能是否正常

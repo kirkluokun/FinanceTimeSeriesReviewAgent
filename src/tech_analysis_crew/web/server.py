@@ -20,9 +20,9 @@ import logging
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, Optional, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,8 +40,7 @@ if project_root not in sys.path:
 try:
     # 尝试使用绝对导入
     from src.tech_analysis_crew.backend import (
-        RunTechAnalysisBackend, 
-        IndicatorExtractionError
+        RunTechAnalysisBackend
     )
 except ModuleNotFoundError as e:
     print(f"绝对导入失败: {e}")
@@ -57,7 +56,7 @@ except ModuleNotFoundError as e:
         
         # 尝试导入
         try:
-            from backend import RunTechAnalysisBackend, IndicatorExtractionError
+            from backend import RunTechAnalysisBackend
         except ImportError:
             # 直接从本地导入（不使用crew.py中的类）
             # 这需要你创建一个简化版的backend.py，不依赖于crew.py
@@ -78,6 +77,8 @@ trend_analysis_dir = os.path.join(tech_analysis_dir, 'trendanalysis')
 # 配置路径
 INPUT_DIR = os.path.join(tech_analysis_dir, 'input')
 OUTPUT_DIR = os.path.join(tech_analysis_dir, 'output')
+
+
 RESULTS_DIR = os.path.join(trend_analysis_dir, 'results')
 CACHE_DIR = os.path.join(trend_analysis_dir, 'cache')
 # 修改静态文件目录路径
@@ -113,11 +114,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # 数据模型
 class AnalysisRequest(BaseModel):
     """分析请求模型"""
     file: str
     query: str = "分析铜价走势"
+
 
 class AnalysisResponse(BaseModel):
     """分析响应模型"""
@@ -125,19 +128,143 @@ class AnalysisResponse(BaseModel):
     message: str
     job_id: str
 
+
 class ProcessResponse(BaseModel):
     """处理响应模型"""
     status: str
     results: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
-# 挂载静态文件
+
+# 挂载静态文件 - 确保静态文件目录存在
+os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 @app.get("/")
 async def index():
     """首页路由，提供Web界面"""
     return FileResponse(os.path.join(current_dir, 'index.html'))
+
+
+@app.get("/api/check-output-files")
+async def check_output_files():
+    """检查输出目录中的最新文件"""
+    try:
+        logger.info(f"检查输出目录: {OUTPUT_DIR}")
+        
+        # 确保输出目录存在
+        if not os.path.exists(OUTPUT_DIR):
+            logger.warning(f"输出目录不存在: {OUTPUT_DIR}")
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            return {
+                "status": "no_data",
+                "message": "没有找到输出目录"
+            }
+            
+        # 获取output目录中的所有目录
+        output_dirs = []
+        for item in os.listdir(OUTPUT_DIR):
+            item_path = os.path.join(OUTPUT_DIR, item)
+            if os.path.isdir(item_path):
+                # 获取目录的修改时间
+                mod_time = os.path.getmtime(item_path)
+                output_dirs.append((item_path, item, mod_time))
+                logger.info(f"找到输出目录: {item} (修改时间: {datetime.fromtimestamp(mod_time)})")
+        
+        # 按修改时间排序，最新的优先
+        output_dirs.sort(key=lambda x: x[2], reverse=True)
+        
+        if not output_dirs:
+            logger.warning("未找到任何输出目录")
+            return {
+                "status": "no_data",
+                "message": "没有找到输出目录"
+            }
+        
+        # 获取最新的目录
+        latest_dir_path, latest_dir_name, _ = output_dirs[0]
+        logger.info(f"使用最新目录: {latest_dir_name}")
+        
+        # 检查目录结构
+        directories = {
+            "cache": False,
+            "reports": False,
+            "serper": False
+        }
+        
+        # 检查文件
+        files = {
+            "cache": [],
+            "reports": [],
+            "serper": []
+        }
+        
+        # 检查是否存在final_report.md
+        final_report_exists = False
+        final_report_content = ""
+        
+        # 检查各个子目录
+        for dir_name in directories.keys():
+            dir_path = os.path.join(latest_dir_path, dir_name)
+            if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                directories[dir_name] = True
+                logger.info(f"子目录存在: {dir_name}")
+                
+                # 获取目录中的文件
+                try:
+                    for file in os.listdir(dir_path):
+                        file_path = os.path.join(dir_path, file)
+                        if os.path.isfile(file_path):
+                            files[dir_name].append(file)
+                            
+                            # 检查是否是final_report.md
+                            if dir_name == "reports" and file == "final_report.md":
+                                final_report_exists = True
+                                logger.info("发现final_report.md文件")
+                                try:
+                                    with open(file_path, 'r', encoding='utf-8') as f:
+                                        final_report_content = f.read()
+                                    logger.info(f"读取final_report.md成功，内容长度: {len(final_report_content)}")
+                                except Exception as e:
+                                    logger.error(f"读取final_report.md时出错: {e}")
+                except Exception as e:
+                    logger.error(f"列出目录 {dir_path} 中的文件时出错: {e}")
+            else:
+                logger.info(f"子目录不存在: {dir_name}")
+        
+        # 确定分析状态
+        if final_report_exists:
+            status = "completed"
+        elif directories["reports"] and files["reports"]:
+            status = "reports_generated"
+        elif directories["serper"] and files["serper"]:
+            status = "search_completed"
+        elif directories["cache"] and files["cache"]:
+            status = "cache_generated"
+        else:
+            status = "started"
+            
+        logger.info(f"分析状态: {status}")
+            
+        return {
+            "status": status,
+            "directory": latest_dir_name,
+            "directory_path": latest_dir_path,
+            "directories": directories,
+            "files": files,
+            "final_report_exists": final_report_exists,
+            "final_report": final_report_content if final_report_exists else "",
+            "is_complete": final_report_exists
+        }
+        
+    except Exception as e:
+        logger.exception(f"检查输出文件错误: {e}")
+        return {
+            "status": "error",
+            "error": f"服务器错误: {str(e)}"
+        }
+
 
 @app.get("/{filename:path}")
 async def serve_static(filename: str):
@@ -145,7 +272,13 @@ async def serve_static(filename: str):
     file_path = os.path.join(current_dir, filename)
     if os.path.exists(file_path) and os.path.isfile(file_path):
         return FileResponse(file_path)
+    
+    # 如果是API路径但不存在，记录更详细的错误信息
+    if filename.startswith('api/'):
+        logger.error(f"API路径不存在: {filename}")
+        
     raise HTTPException(status_code=404, detail="文件不存在")
+
 
 @app.post("/api/process-csv")
 async def process_csv(file: UploadFile = File(...)):
@@ -375,6 +508,7 @@ async def process_csv(file: UploadFile = File(...)):
             }
         )
 
+
 @app.post("/api/save-processed-csv")
 async def save_processed_csv(file: UploadFile = File(...)):
     """保存已处理的CSV文件到input目录"""
@@ -421,6 +555,11 @@ async def save_processed_csv(file: UploadFile = File(...)):
             }
         )
 
+
+# 存储分析任务信息
+ANALYSIS_JOBS = {}
+
+
 @app.post("/api/run-analysis", response_model=AnalysisResponse)
 async def run_analysis(
     request: AnalysisRequest, 
@@ -445,44 +584,37 @@ async def run_analysis(
                     status_code=404, 
                     detail=f"文件不存在: {input_file}"
                 )
-            
-        # 创建临时目录存放输出
-        job_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = os.path.join(OUTPUT_DIR, job_id)
-        os.makedirs(output_path, exist_ok=True)
         
-        logger.info(
-            f"运行复盘分析: 输入文件 {input_path}, "
-            f"查询 \"{query}\", 输出目录 {output_path}"
-        )
+        # 创建job_id
+        job_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        logger.info(f"运行复盘分析: 输入文件 {input_path}, 查询 \"{query}\", ID: {job_id}")
         
         # 定义后台任务执行函数
         def run_analysis_task():
             try:
-                # 创建RunTechAnalysisBackend实例
-                backend = RunTechAnalysisBackend()
-                
-                # 设置输出目录
-                backend.output_dir = output_path
-                
                 # 禁用遥测以避免SSL错误
                 os.environ["OTEL_SDK_DISABLED"] = "true"
                 
-                # 直接调用analyze方法
+                # 创建RunTechAnalysisBackend实例
+                backend = RunTechAnalysisBackend()
+                
+                # 调用analyze方法
                 result = backend.analyze(input_path, query)
                 
-                if result["status"] == "success":
-                    logger.info(f"分析任务 {job_id} 完成，结果：{result}")
-                else:
-                    logger.error(
-                        f"分析任务 {job_id} 失败，"
-                        f"错误：{result.get('error', '未知错误')}"
-                    )
-                    
-            except IndicatorExtractionError as e:
-                logger.error(f"分析任务 {job_id} 指标提取失败: {e}")
+                # 获取output_dir
+                output_dir = result.get("output_file", "").split("/reports/")[0] if result.get("output_file") else ""
+                
+                logger.info(f"分析任务启动，output_dir: {output_dir}")
+                
+                # 存储任务信息
+                ANALYSIS_JOBS[job_id] = {
+                    "output_dir": output_dir,
+                    "status": result.get("status", ""),
+                    "start_time": datetime.now().isoformat()
+                }
+                
             except Exception as e:
-                logger.error(f"分析任务 {job_id} 执行错误: {e}")
+                logger.error(f"分析任务执行错误: {e}")
         
         # 添加任务到后台执行
         background_tasks.add_task(run_analysis_task)
@@ -499,51 +631,15 @@ async def run_analysis(
         logger.exception(f"运行复盘分析错误: {e}")
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
-@app.get("/api/analysis-status/{job_id}")
-async def analysis_status(job_id: str):
-    """获取分析任务状态"""
-    try:
-        # 验证job_id格式，防止路径遍历
-        if not job_id or '/' in job_id or '\\' in job_id or '..' in job_id:
-            raise HTTPException(status_code=400, detail="无效的作业ID")
-            
-        # 查找对应的输出目录
-        output_path = os.path.join(OUTPUT_DIR, job_id)
-        if not os.path.exists(output_path):
-            raise HTTPException(status_code=404, detail=f"作业不存在: {job_id}")
-            
-        # 检查是否有结果文件
-        files = list(Path(output_path).glob("*"))
-        if not files:
-            return JSONResponse(content={
-                "status": "running",
-                "message": "分析正在进行中"
-            })
-            
-        # 寻找summary文件
-        summary_files = list(Path(output_path).glob("*summary*.md"))
-        if summary_files:
-            # 读取summary内容
-            with open(summary_files[0], 'r', encoding='utf-8') as f:
-                summary_content = f.read()
-                
-            return JSONResponse(content={
-                "status": "completed",
-                "summary": summary_content,
-                "files": [f.name for f in files]
-            })
-        else:
-            return JSONResponse(content={
-                "status": "running",
-                "message": "分析正在进行中，已生成部分文件",
-                "files": [f.name for f in files]
-            })
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"获取分析状态错误: {e}")
-        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """记录所有请求"""
+    logger.info(f"收到请求: {request.method} {request.url.path}")
+    response = await call_next(request)
+    logger.info(f"响应: {response.status_code}")
+    return response
+
 
 def main():
     """主函数"""
@@ -554,6 +650,7 @@ def main():
     except Exception as e:
         logger.exception(f"服务器启动错误: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main() 
