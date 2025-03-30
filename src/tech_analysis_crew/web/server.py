@@ -31,9 +31,42 @@ from pydantic import BaseModel
 
 # 添加项目根目录到Python路径
 current_file = os.path.abspath(__file__)
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(current_file))))
 if project_root not in sys.path:
     sys.path.append(project_root)
+
+# 导入RunTechAnalysisBackend类
+try:
+    # 尝试使用绝对导入
+    from src.tech_analysis_crew.backend import (
+        RunTechAnalysisBackend, 
+        IndicatorExtractionError
+    )
+except ModuleNotFoundError as e:
+    print(f"绝对导入失败: {e}")
+    try:
+        # 尝试使用相对导入
+        import os
+        import sys
+        # 添加当前目录的父目录到sys.path
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if parent_dir not in sys.path:
+            sys.path.append(parent_dir)
+        print(f"添加路径: {parent_dir}")
+        
+        # 尝试导入
+        try:
+            from backend import RunTechAnalysisBackend, IndicatorExtractionError
+        except ImportError:
+            # 直接从本地导入（不使用crew.py中的类）
+            # 这需要你创建一个简化版的backend.py，不依赖于crew.py
+            print("警告: 无法导入backend模块，将使用本地实现")
+            # 这里可以添加一个简化版的RunTechAnalysisBackend实现
+    except Exception as e:
+        print(f"导入错误: {e}")
+        print(f"当前Python路径: {sys.path}")
+        raise
 
 # 获取当前目录
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +86,11 @@ IMAGES_DIR = os.path.join(STATIC_DIR, 'images')
 FILES_DIR = os.path.join(STATIC_DIR, 'files')
 
 # 确保目录存在
-for directory in [INPUT_DIR, OUTPUT_DIR, RESULTS_DIR, CACHE_DIR, STATIC_DIR, IMAGES_DIR, FILES_DIR]:
+dirs_to_create = [
+    INPUT_DIR, OUTPUT_DIR, RESULTS_DIR, CACHE_DIR, 
+    STATIC_DIR, IMAGES_DIR, FILES_DIR
+]
+for directory in dirs_to_create:
     os.makedirs(directory, exist_ok=True)
 
 # 配置日志
@@ -78,15 +115,18 @@ app.add_middleware(
 
 # 数据模型
 class AnalysisRequest(BaseModel):
+    """分析请求模型"""
     file: str
     query: str = "分析铜价走势"
 
 class AnalysisResponse(BaseModel):
+    """分析响应模型"""
     status: str
     message: str
     job_id: str
 
 class ProcessResponse(BaseModel):
+    """处理响应模型"""
     status: str
     results: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -142,7 +182,9 @@ async def process_csv(file: UploadFile = File(...)):
         main_script = os.path.join(trend_analysis_dir, 'main.py')
         output_path = RESULTS_DIR
         
-        logger.info(f"运行趋势分析: {main_script} {cache_path} --output-dir {output_path}")
+        logger.info(
+            f"运行趋势分析: {main_script} {cache_path} --output-dir {output_path}"
+        )
         
         # 使用数组方式传递参数，这更安全
         cmd = [
@@ -205,7 +247,11 @@ async def process_csv(file: UploadFile = File(...)):
         # 搜索最近生成的文件
         # 获取所有结果文件，按修改时间排序
         all_files = list(Path(output_path).glob("*"))
-        files = sorted(all_files, key=lambda x: x.stat().st_mtime, reverse=True)
+        files = sorted(
+            all_files, 
+            key=lambda x: x.stat().st_mtime, 
+            reverse=True
+        )
         recent_files = files[:20]  # 只考虑最近的20个文件
         
         # 筛选出可能属于本次处理的文件 - 优先考虑时间戳匹配
@@ -216,7 +262,10 @@ async def process_csv(file: UploadFile = File(...)):
         
         # 如果找不到匹配文件，使用最近的文件
         if not matching_files:
-            logger.warning(f"找不到与时间戳{timestamp}或用户ID{user_id}或文件名{file_stem}匹配的文件，使用最近的文件")
+            logger.warning(
+                f"找不到与时间戳{timestamp}或用户ID{user_id}或"
+                f"文件名{file_stem}匹配的文件，使用最近的文件"
+            )
             matching_files = recent_files[:8]  # 最多取8个文件
         
         if not matching_files:
@@ -245,7 +294,9 @@ async def process_csv(file: UploadFile = File(...)):
             logger.info(f"处理文件 {i+1}/{len(matching_files)}: {file_name}")
             
             # 确定目标目录和路径
-            is_image = file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']
+            is_image = file_path.suffix.lower() in [
+                '.png', '.jpg', '.jpeg', '.gif'
+            ]
             dest_dir = IMAGES_DIR if is_image else FILES_DIR
             dest_path = os.path.join(dest_dir, file_name)
             
@@ -271,20 +322,23 @@ async def process_csv(file: UploadFile = File(...)):
                     
                     # 更详细的文件内容判定，确保正确添加到结果字典
                     if is_image:
-                        if 'sensitive-trend_visualization' in file_name and 'insensitive' not in file_name:
+                        if ('sensitive-trend_visualization' in file_name and 
+                            'insensitive' not in file_name):
                             results_dict['sensitive']['visualization'] = file_name
                             logger.info(f"添加敏感版趋势图: {file_name}")
                         elif 'insensitive-trend_visualization' in file_name:
                             results_dict['insensitive']['visualization'] = file_name
                             logger.info(f"添加不敏感版趋势图: {file_name}")
                     else:
-                        if 'sensitive-trend_analysis' in file_name and 'insensitive' not in file_name:
+                        if ('sensitive-trend_analysis' in file_name and 
+                            'insensitive' not in file_name):
                             results_dict['sensitive']['analysis'] = file_name
                             logger.info(f"添加敏感版趋势分析: {file_name}")
                         elif 'insensitive-trend_analysis' in file_name:
                             results_dict['insensitive']['analysis'] = file_name
                             logger.info(f"添加不敏感版趋势分析: {file_name}")
-                        elif 'sensitive-enhanced_analysis' in file_name and 'insensitive' not in file_name:
+                        elif ('sensitive-enhanced_analysis' in file_name and 
+                              'insensitive' not in file_name):
                             results_dict['sensitive']['enhanced_analysis'] = file_name
                             logger.info(f"添加敏感版增强分析: {file_name}")
                         elif 'insensitive-enhanced_analysis' in file_name:
@@ -368,7 +422,10 @@ async def save_processed_csv(file: UploadFile = File(...)):
         )
 
 @app.post("/api/run-analysis", response_model=AnalysisResponse)
-async def run_analysis(request: AnalysisRequest, background_tasks: BackgroundTasks):
+async def run_analysis(
+    request: AnalysisRequest, 
+    background_tasks: BackgroundTasks
+):
     """运行复盘分析"""
     try:
         input_file = request.file
@@ -384,43 +441,46 @@ async def run_analysis(request: AnalysisRequest, background_tasks: BackgroundTas
             # 如果不在INPUT_DIR，检查CACHE_DIR
             input_path = os.path.join(CACHE_DIR, input_file)
             if not os.path.exists(input_path):
-                raise HTTPException(status_code=404, detail=f"文件不存在: {input_file}")
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"文件不存在: {input_file}"
+                )
             
-        # 调用backend.py脚本
-        run_backend_script = os.path.join(tech_analysis_dir, 'run_backend.py')
-        
         # 创建临时目录存放输出
         job_id = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_path = os.path.join(OUTPUT_DIR, job_id)
         os.makedirs(output_path, exist_ok=True)
         
-        logger.info(f"运行复盘分析: {run_backend_script} --input {input_path} --query \"{query}\" --output-dir {output_path}")
+        logger.info(
+            f"运行复盘分析: 输入文件 {input_path}, "
+            f"查询 \"{query}\", 输出目录 {output_path}"
+        )
         
         # 定义后台任务执行函数
         def run_analysis_task():
             try:
-                # 使用数组方式传递参数，这更安全
-                cmd = [
-                    sys.executable,
-                    run_backend_script,
-                    '--input',
-                    input_path,
-                    '--query',
-                    query,
-                    '--output-dir',
-                    output_path
-                ]
+                # 创建RunTechAnalysisBackend实例
+                backend = RunTechAnalysisBackend()
                 
-                logger.info(f"执行命令: {cmd}")
+                # 设置输出目录
+                backend.output_dir = output_path
                 
-                subprocess.run(
-                    cmd,
-                    shell=False,  # 不使用shell执行命令
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                logger.info(f"分析任务 {job_id} 完成")
+                # 禁用遥测以避免SSL错误
+                os.environ["OTEL_SDK_DISABLED"] = "true"
+                
+                # 直接调用analyze方法
+                result = backend.analyze(input_path, query)
+                
+                if result["status"] == "success":
+                    logger.info(f"分析任务 {job_id} 完成，结果：{result}")
+                else:
+                    logger.error(
+                        f"分析任务 {job_id} 失败，"
+                        f"错误：{result.get('error', '未知错误')}"
+                    )
+                    
+            except IndicatorExtractionError as e:
+                logger.error(f"分析任务 {job_id} 指标提取失败: {e}")
             except Exception as e:
                 logger.error(f"分析任务 {job_id} 执行错误: {e}")
         
