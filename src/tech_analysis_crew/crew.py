@@ -1169,14 +1169,14 @@ class TimeSeriesAnalysisFlow():
         # 直接创建描述，不使用mock对象，避免raw属性问题
         description = f"""
             [TASK_TYPE:report][QUERY_TYPE:{query_type}]
-            Assuming you are the absolute authority expert in the field related to {query.split("after:")[0].strip()}, please complete the following tasks:
+            Assume you are an absolute authority in the field related to {query.split("after:")[0].strip()}, please complete the following tasks:
             
-            1. The context is the objective content of multiple web pages crawled by previous links.
-            2. Based on the analysis of multiple web page contents crawled previously, generate a comprehensive summary report targeting {query}.
-            3. Focus on analysis and organization: form the logic of trends (rise, fall, or turning points), and the underlying deep-seated reasons.
-            4. When citing evidence from multiple sources around a certain viewpoint, ensure each citation is followed by the URL source, and accuracy is a must.
+            1. The following is a summary of the key points extracted from the web pages crawled regarding {query}.
+            2. Based on these key points of objective information, generate a comprehensive summary report regarding {query}.
+            3. Focus on analysis and organization: form the logic of trends (upward, downward, or turning points) and potential underlying reasons.
+            4. When citing multiple sources of evidence around a particular viewpoint, ensure that each citation is followed by the source URL："[url link]".
             
-            Please ensure the report content is accurate, comprehensive, and provides valuable insights.
+            Please ensure that the report content is accurate, comprehensive, and provides valuable insights.
 
             The following is the crawled content:
             """
@@ -1190,7 +1190,19 @@ class TimeSeriesAnalysisFlow():
         return Task(
             description=description,
             expected_output=f"""
-            A structurally complete report on the causal analysis of {query.split("after:")[0].strip()}. The report is written in Chinese.
+            A report analyzing {query}. The report is written in Chinese. 
+            
+            The report format should be in markdown, with paragraphs structured correctly. Use ## for level 1 headings, ### for level 2 headings, and number the paragraphs with Arabic numerals. The format for URL citations should be "[url link]".
+            
+            Report outline:
+            Title: Create a title based on the context content
+            1. Market situation: Describe the objective situation of {query.split("after:")[0].strip()} based on the description of the market in the report. (Notice: This section does not need to record the source URL.)
+
+            2. Description of objective data: Summarize the key influences, objective events, data, and news that have a significant impact on {query.split("after:")[0].strip()}. (Do not reiterate market trend data.)
+
+            3. The deep logic of {query.split("after:")[0].strip()}: Describe the deep logic behind the formation of {query.split("after:")[0].strip()} based on the logical description in the report
+
+            4. Summary: Generate insightful conclusions based on the summary description in the report
             """,
             agent=agent,
             async_execution=False
@@ -1263,8 +1275,7 @@ class TimeSeriesAnalysisFlow():
         
         # 报告标题
         final_report = f"# {self.state.indicator_description} 价格分析报告\n\n"
-        final_report += f"分析日期: {datetime.now().strftime('%Y-%m-%d')}\n\n"
-        final_report += "---\n\n"
+        final_report += "##\n\n"
         
         # 按时间段顺序拼接报告
         sorted_periods = sorted(period_reports.keys())

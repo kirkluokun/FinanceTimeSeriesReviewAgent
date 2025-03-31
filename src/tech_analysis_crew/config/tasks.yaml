@@ -15,34 +15,6 @@ search_news_task:
   async_execution: false
   output_file: "{job_id}/serper/{time_period_id}_search_results.json"
 
-crawl_websites_task:
-  description: "爬取搜索结果中的网页内容"
-  expected_output: "爬取的网页内容"
-  agent: "crawler_agent"
-  async_execution: true
-  output_file: "{job_id}/crawled/{time_period_id}_{url_id}.txt"
-
-analyze_content_task:
-  description: "分析爬取的内容，提取与价格变化相关的关键信息"
-  expected_output: "内容分析结果"
-  agent: "content_analyzer_agent"
-  async_execution: true
-  output_file: "{job_id}/analysis/{time_period_id}_{url_id}_analysis.json"
-
-analyze_time_period_task:
-  description: "分析特定时间段的价格变化原因"
-  expected_output: "时间段分析结果"
-  agent: "lead_analyst_agent"
-  async_execution: false
-  output_file: "{job_id}/analysis/{time_period_id}_summary.json"
-
-generate_report_task:
-  description: "生成完整的分析报告"
-  expected_output: "完整的分析报告"
-  agent: "report_agent"
-  async_execution: false
-  output_file: "{job_id}/reports/final_report.md"
-
 extract_indicator_task:
   description: "从用户查询中提取需要被搜索的主体指标，如果是中文则翻译成英文，返回格式为‘提取的英文指标名’。"
   expected_output: "返回格式为‘提取的英文指标名’，例如’gold price’"

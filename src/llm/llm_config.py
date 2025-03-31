@@ -29,9 +29,9 @@ class LLMConfig:
                 "model": "gemini/gemini-2.0-flash",
                 "api_key": os.environ.get("GEMINI_API_KEY"),
             },
-            "gpt-4o": {
+            "gpt-4o-mini": {
                 "provider": "openai",
-                "model": "openai/gpt-4o",
+                "model": "openai/gpt-4o-mini",
                 "api_key": os.environ.get("OPENAI_API_KEY"),
             },
             "deepseek": {
@@ -39,9 +39,9 @@ class LLMConfig:
                 "model": "deepseek/deepseek-chat",
                 "api_key": os.environ.get("DEEPSEEK_API_KEY"),
             },
-            "gemini-2.5-pro": {
+            "gemini-1.5-pro": {
                 "provider": "gemini",
-                "model": "gemini/gemini-2.5-pro-exp-03-25",
+                "model": "gemini/gemini-1.5-pro",
                 "api_key": os.environ.get("GEMINI_API_KEY"),
             },
             "deepseek-v3-ARK": {

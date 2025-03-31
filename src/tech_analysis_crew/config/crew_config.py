@@ -27,7 +27,7 @@ class CrewConfig:
         crawler_llm = LLM(
             provider=model_config["provider"],
             model=model_config["model"],
-            temperature=0.7,
+            temperature=0,
             api_key=model_config["api_key"]
         )
         
@@ -43,10 +43,10 @@ class CrewConfig:
         # 创建爬取代理
         crawler_agent = Agent(
             role="Web Content Crawling Expert",
-            goal="Accurately extract key information related to specified questions from web content, save original content as MD files, and provide concise summaries",
-            backstory="""You are a professional web content intelligence specialist, skilled at extracting critical information from web pages with specific questions in mind.
-            Your job is to crawl content from specified URLs, summarize key points for each page, and extract essential information.
-            Important data from web pages must be recorded. You need to ensure the extracted content is accurate and complete, and provide summaries that precisely address the core issues.""",
+            goal="Accurately extract key information related to the specified question",
+            backstory="""You are a professional analyst skilled in extracting key information related to specific questions from web pages.
+            Your job is to crawl content from specified URLs, summarize key points for each page, and extract necessary information.
+            Important data, viewpoints, and logic from the web pages must be recorded. You need to ensure that the extracted content is accurate and complete.""",
             verbose=False,
             allow_delegation=False,
             tools=crawl_tools,
@@ -73,10 +73,9 @@ class CrewConfig:
         # 创建报告代理
         return Agent(
             role="Skilled Financial Report Writer",
-            goal="Integrate intelligence information and generate comprehensive reports",
-            backstory="""You are a financial analyst skilled at writing reports, with expertise in integrating and analyzing information.
-            Your job is to take the prepared intelligence information from searches and write a complete report.
-            You need to ensure the report has a clear structure, accurate content, and provides valuable, in-depth insights.""",
+            goal="Write a summary report based on multiple web content reports.",
+            backstory="""You are an analyst with professional skills in integrating and analyzing information.
+            You excel at summarizing the original content from multiple web pages and forming a comprehensive summary report.""",
             verbose=False,
             allow_delegation=False,
             llm=report_llm
@@ -87,23 +86,23 @@ class CrewConfig:
         """创建总结代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini-2.0-flash")
+        model_config = llm_config.get_model("gpt-4o-mini")
         
         # 创建LLM配置
         conclusion_llm = LLM(
             model=model_config["model"],
-            temperature=0.7,
+            temperature=0,
             api_key=model_config["api_key"],
         )
         
         # 创建总结代理
         conclusion_agent = Agent(
-            role="Comprehensive Analysis Expert",
-            goal="Synthesize multiple reports, extract core insights, and generate in-depth comprehensive analysis",
-            backstory="""You are a seasoned comprehensive analysis expert, skilled at examining issues from multiple perspectives and forming holistic views.
-            You can organically integrate information from different reports, identify commonalities and differences, and reveal underlying patterns.
-            You excel at grasping macro trends while paying attention to micro details, enabling readers to fully understand the logic behind market changes.
-            Your analysis has both historical depth and forward-looking vision, providing readers with comprehensive and valuable market insights.""",
+            role="Senior Analyst",
+            goal="Integrate multiple reports, extract core insights, and generate in-depth comprehensive analysis",
+            backstory="""You are an experienced comprehensive analysis expert, skilled at examining issues from multiple perspectives and forming an overall viewpoint.
+            You can organically integrate information from different reports, identify commonalities and differences, and reveal potential patterns.
+            While grasping macro trends, you pay attention to micro details, enabling readers to fully understand the logic behind market changes.
+            Your analysis possesses both historical depth and forward-looking insights, providing readers with comprehensive and valuable market insights.""",
             verbose=False,
             allow_delegation=False,
             llm=conclusion_llm
@@ -123,11 +122,11 @@ class CrewConfig:
                 
                 URL: {url}
                 
-                该URL指向PDF文件，根据系统规则，我们不处理PDF文件。
+                This URL points to a PDF file, and according to system rules, we do not process PDF files.
                 """,
                 expected_output=f"""
-                无法处理PDF文件: {url}
-                请提供其他非PDF格式的URL进行分析。
+                Cannot process PDF file: {url}
+                Please provide another non-PDF format URL for analysis.
                 """,
                 agent=agent
             )
@@ -146,23 +145,35 @@ class CrewConfig:
 
             Use the Firecrawl tool to scrape content from the following URL: {url}
             
-            如果url是pdf文件，则直接返回说明无法爬取的Task。
+            Give the URL a concise title that highlights the content of the page.
+            
+            If the URL is a PDF file, return a task indicating that it cannot be crawled.
 
             Please complete the following tasks:
-            1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
-            2. Analyze the content with the question "{query}" in mind, noting that the article was published on "{date}", please consider the historical context
             
-            {market_data_context}
+            1. Use the FirecrawlScrapeMdCleanTool to scrape the page content
+
+            2. Analyze the content with the question "{query}" in mind, {market_data_context} is historical market data, and describe the trends related to the trend type/peak/trough described by {query}.
             
             3. Summarize key information related to the "{indicator_description}" financial indicator from the page content, including important events, significant data, and key viewpoints, especially focusing on content that reflects deep-level logic
+            
             4. If market data is provided above, identify connections between market movements and events/news described in the article
+            
             5. Ensure the content is accurate and comprehensive. Do not include your own opinions or fabricate facts.
             
             Note: You must save the original scraped webpage content in Markdown format to the specified file path. This is an important step to ensure the analysis process is traceable and reproducible.
             """,
             expected_output=f"""
-            A retrospective analysis report based on the page content about "{query}", focusing on analyzing factors affecting the {indicator_description} financial indicator.
-            The report should include references to market data (if provided) and the source URL at the end.
+            An objective web crawling report based on "{query}", summarizing the key factors that influence the {indicator_description} financial indicator from the webpage. Do not add any personal opinions.
+            The report format is in markdown, with markdown paragraphs set up properly, ## for level 1 headings, ### for level 2 headings, and numbered paragraphs using Arabic numerals.
+            Citations (if provided) and the final source URL should be included.
+            The structure of the report:
+            Title: Summary of the main content of the webpage
+            1. The price trend of {indicator_description} described by {query}, with reference to {market_data_context}.
+            2. Logic of trend/peak formation: A summary of the logic, reasons, and viewpoints regarding the trend described by {query} from the webpage
+            3. Objective data supporting the trend/peak formation: Objective facts, data, and evidence related to {query}
+            4. Summary of {query} from the webpage
+            5. Source URL of the webpage: formatted as [url]
             """,
             agent=agent,
             # 增加执行控制参数
@@ -174,7 +185,7 @@ class CrewConfig:
         """创建报告生成任务，依赖于爬取任务"""
         return Task(
             description=f"""
-            假设你自己是{query.split("after:")[0].strip()}涉及的领域的绝对权威专家，请完成以下工作：
+            假设你自己是{query.split("after:")[0].strip()}专家，请完成以下工作：
             
             1. 上下文是之前多个links所爬取的网页的客观内容
             2. 基于之前爬取的多篇网页内容分析，生成一份针对{query}的全面的汇总报告。
@@ -198,21 +209,19 @@ class CrewConfig:
         # 创建任务描述
         task_description = f"""
         [TASK_TYPE:conclusion]
-        基于三种查询(trend_query, high_price_query, low_price_query)的分析报告，
+        以三种查询(trend_query, high_price_query, low_price_query)的分析报告作为素材，
         为时间段{period_index}({start_date}至{end_date})撰写一份区间内全面的复盘总结报告。
         
-        请完成以下工作：
-        1. 综合分析三种查询报告的内容
-        2. 详细阐述该时间区间{indicator_description}价格走势的逻辑
-        3. 深入分析区间高点和低点所发生的重要事件及其影响
-        4. 揭示价格变动背后的根本原因和市场逻辑
-        5. 提炼出该时间段最关键的洞察和结论
+        请撰写提纲如下的报告，你只能根据三种查询的分析报告作为素材，不能使用自己编纂的数据：
+        1. 区间概述：综合分析三种查询报告的内容，详细总结、阐述该时间区间{indicator_description}价格走势的逻辑
+        2. 关键逻辑分析：深入分析形成区间趋势、区间高点、区间低点的重要事件、逻辑，描述导致趋势形成的深层次逻辑，客观事件、数据、新闻等，但你不被允许编纂数据，你只能使用上下文中存在的信息。
+        3. 洞察和结论：总结影响{indicator_description}在本区间内的最关键的本质因素
         
-        请确保报告内容系统、全面、深入，并给出有价值的市场洞察。报告使用中文撰写。
+        请确保报告内容系统、全面、深入，并给出有价值的市场洞察。报告使用中文撰写。逻辑的细节要饱满、通俗易懂，字数要在3000字以上。
         """
         
         expected_output = f"""
-        一份markdown格式的报告，针对{start_date}至{end_date}期间{indicator_description}价格走势的全面复盘总结报告，
+        一份markdown格式的报告，针对{start_date}至{end_date}期间{indicator_description}价格走势的全面复盘总结报告，你只能根据三种查询的分析报告作为素材，不能使用自己编纂的数据.
         深入分析期间价格变动的原因、高低点事件及市场驱动的底层逻辑。报告使用中文撰写。观点来源url附在报告最后。
         """
         
