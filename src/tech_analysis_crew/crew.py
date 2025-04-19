@@ -1268,6 +1268,18 @@ class TimeSeriesAnalysisFlow():
             indicator_description=self.state.indicator_description
         )
 
+    def _clean_markdown_symbols(self, text: str) -> str:
+        """清理markdown文本中的特殊符号
+        
+        Args:
+            text: 需要清理的文本
+            
+        Returns:
+            清理后的文本
+        """
+        # 清理【```markdown】和【```】符号
+        cleaned_text = text.replace("```markdown", "").replace("```", "")
+        return cleaned_text
 
     def _generate_final_markdown(self, period_reports: Dict[int, str]) -> str:
         """拼接所有时间段报告生成最终报告"""
@@ -1275,16 +1287,21 @@ class TimeSeriesAnalysisFlow():
         
         # 报告标题
         final_report = f"# {self.state.indicator_description} 价格分析报告\n\n"
-        final_report += "##\n\n"
+        final_report += "\n\n"
         
         # 按时间段顺序拼接报告
         sorted_periods = sorted(period_reports.keys())
         
         for period_index in sorted_periods:
             period_report = period_reports[period_index]
+            # 清理特殊符号
+            period_report = self._clean_markdown_symbols(period_report)
             final_report += f"\n\n## 时间段 {period_index}\n\n"
             final_report += period_report
             final_report += "\n\n---\n\n"
+        
+        # 清理整个报告中可能存在的符号
+        final_report = self._clean_markdown_symbols(final_report)
         
         return final_report
     
