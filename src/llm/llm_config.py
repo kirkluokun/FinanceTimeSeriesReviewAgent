@@ -7,8 +7,6 @@ import os
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
 
 
 class LLMConfig:
@@ -16,6 +14,9 @@ class LLMConfig:
     
     def __init__(self):
         """初始化 LLM 配置"""
+
+        load_dotenv()
+
         # 设置默认模型
         self.default_model = "gemini-2.0-flash"
         

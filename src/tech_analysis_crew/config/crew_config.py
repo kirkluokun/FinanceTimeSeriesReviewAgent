@@ -21,7 +21,7 @@ class CrewConfig:
         """创建爬取代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini-2.0-flash")
+        model_config = llm_config.get_model("gemini-2.5-flash-preview-04-17")
         
         # 创建LLM配置
         crawler_llm = LLM(
@@ -60,7 +60,7 @@ class CrewConfig:
         """创建报告生成代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gemini-2.0-flash")
+        model_config = llm_config.get_model("gemini-2.5-flash-preview-04-17")
         
         # 创建LLM配置
         report_llm = LLM(
@@ -86,7 +86,7 @@ class CrewConfig:
         """创建总结代理"""
         
         # 使用 LLMConfig 获取模型配置
-        model_config = llm_config.get_model("gpt-4o-mini")
+        model_config = llm_config.get_model("gemini-2.5-flash-preview-04-17")
         
         # 创建LLM配置
         conclusion_llm = LLM(

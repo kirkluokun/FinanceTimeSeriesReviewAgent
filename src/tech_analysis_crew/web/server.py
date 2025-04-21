@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, Any
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, FileResponse
@@ -28,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
+
+# 第一时间加载环境变量
+load_dotenv()
 
 # 添加项目根目录到Python路径
 current_file = os.path.abspath(__file__)

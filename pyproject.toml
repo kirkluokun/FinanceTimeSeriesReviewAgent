@@ -1,7 +1,7 @@
 [project]
 name = "financial-aiagent"
 version = "0.1.0"
-description = "infoAI using crewAI"
+description = "基于CrewAI的金融时间序列数据分析平台"
 authors = [{ name = "Kirk", email = "luokunkirk@outlook.com" }]
 requires-python = ">=3.10,<3.13"
 dependencies = [
@@ -17,20 +17,21 @@ dependencies = [
     "openai>=1.12.0",
     "anthropic>=0.18.1",
     "google-generativeai>=0.3.2",
+    "fastapi>=0.104.1",
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.6",
     "beautifulsoup4>=4.12.3",
     "requests>=2.31.0",
     "pandas>=2.2.0",
     "numpy>=1.26.3",
     "PyYAML>=6.0.1",
-    "docling>=2.18.0",
+    "rich>=13.3.0",
+    "firecrawl>=0.2.0",
 ]
 
 [project.scripts]
-infoai = "infoai.main:run"
-run_crew = "infoai.main:run"
-train = "infoai.main:train"
-replay = "infoai.main:replay"
-test = "infoai.main:test"
+run_analysis = "tech_analysis_crew.run_backend:main"
+start_server = "tech_analysis_crew.web.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -38,3 +39,9 @@ build-backend = "hatchling.build"
 
 [tool.crewai]
 type = "crew"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"

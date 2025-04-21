@@ -199,6 +199,7 @@ class RunTechAnalysisBackend:
         Returns:
             包含分析结果和状态信息的字典
         """
+
         # 记录开始时间
         start_time = datetime.now()
         self.progress["start_time"] = start_time.isoformat()
@@ -327,7 +328,7 @@ class RunTechAnalysisBackend:
 if __name__ == "__main__":
     # 禁用CrewAI遥测以避免SSL错误
     os.environ["OTEL_SDK_DISABLED"] = "true"
-    
+
     # 解析命令行参数
     import argparse
     
