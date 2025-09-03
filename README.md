@@ -12,14 +12,34 @@
 - 生成高质量的分析报告
 - 提供Web界面进行交互
 
+
 ## 系统要求
 
 - Python 3.10+（建议使用Python 3.10-3.12）
+- **uv** (用于环境和依赖管理，安装见下文)
 - Node.js 14+（可选，用于前端开发）
-- 虚拟环境（推荐）
+- 虚拟环境（`uv` 会自动管理）
 - 必要的API密钥
 
 ## 安装步骤
+
+### 0. 安装 uv (如果尚未安装)
+
+`uv` 是一个非常快速的 Python 包安装器和解析器。推荐使用它来管理本项目的环境和依赖。
+
+**macOS 和 Linux:**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows:**
+
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+安装完成后，关闭并重新打开你的终端，或者运行 `source $HOME/.cargo/env` (macOS/Linux) 或重启 Powershell (Windows) 来让 `uv` 命令生效。你可以通过运行 `uv --version` 来验证安装是否成功。
 
 ### 1. 克隆仓库到本地
 
@@ -28,29 +48,38 @@ git clone <仓库地址>
 cd crewai-agent
 ```
 
-### 2. 安装Python环境
+### 2. 创建并激活虚拟环境并安装依赖 (使用 uv)
 
-#### Linux/MacOS:
+`uv` 可以一步完成虚拟环境的创建和依赖安装。
 
 ```bash
-# 创建虚拟环境
-python -m venv .venv
-# 激活虚拟环境
-source .venv/bin/activate
-# 安装依赖
-pip install -r requirements.txt
+# 在项目根目录 (crewai-agent) 运行:
+uv sync
 ```
 
-#### Windows:
+这个命令会：
+1.  查找 `pyproject.toml` 文件。
+2.  如果 `.venv` 虚拟环境不存在，会自动创建一个。
+3.  根据 `pyproject.toml` (以及可能存在的 `uv.lock` 文件) 安装所有必需的依赖项到 `.venv` 中。
+4.  确保你的环境与项目定义的依赖完全一致。
+
+**激活虚拟环境:**
+
+安装完依赖后，你需要激活这个由 `uv` 创建（或管理）的虚拟环境：
+
+**Linux/MacOS:**
+
+```bash
+source .venv/bin/activate
+```
+
+**Windows:**
 
 ```batch
-# 创建虚拟环境
-python -m venv .venv
-# 激活虚拟环境
 .venv\Scripts\activate
-# 安装依赖
-pip install -r requirements.txt
 ```
+
+*重要提示:* 之后每次在这个项目工作时，都需要先激活虚拟环境。
 
 ### 3. 安装Node.js（可选，用于前端开发）
 
